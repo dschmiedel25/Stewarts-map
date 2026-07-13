@@ -3,6 +3,8 @@
 <head>
 <meta charset="UTF-8">
 <title>Stewart's Bathroom Report</title>
+<link rel="icon" href="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAxMDAgMTAwIj48dGV4dCB4PSI1MCIgeT0iNzUiIGZvbnQtc2l6ZT0iNzUiIHRleHQtYW5jaG9yPSJtaWRkbGUiPvCfmr08L3RleHQ+PC9zdmc+">
+<link rel="apple-touch-icon" href="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAxMDAgMTAwIj48dGV4dCB4PSI1MCIgeT0iNzUiIGZvbnQtc2l6ZT0iNzUiIHRleHQtYW5jaG9yPSJtaWRkbGUiPvCfmr08L3RleHQ+PC9zdmc+">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css" />
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
 <script type="module">
@@ -105,9 +107,29 @@
     cursor:pointer;line-height:1.4;
   }
   #nearestInfo b{color:var(--amber);}
+  #installBanner{
+    position:fixed;left:0;right:0;bottom:0;z-index:2000;
+    background:#161616;border-top:2px solid var(--amber);
+    padding:14px 16px calc(14px + env(safe-area-inset-bottom));
+    display:none;align-items:flex-start;gap:12px;
+    box-shadow:0 -4px 16px rgba(0,0,0,.5);
+  }
+  #installBanner.show{display:flex;}
+  #installBanner .icon{font-size:26px;flex:none;}
+  #installBanner .msg{flex:1;font-size:14.5px;line-height:1.4;color:var(--cream);}
+  #installBanner .msg b{color:var(--amber);}
+  #installBanner .closeBtn{
+    flex:none;background:none;border:none;color:#999;font-size:20px;cursor:pointer;padding:0 4px;
+  }
 </style>
 </head>
 <body>
+
+<div id="installBanner">
+  <div class="icon">📲</div>
+  <div class="msg" id="installMsg">Add this to your home screen for one-tap access.</div>
+  <button class="closeBtn" id="installClose">✕</button>
+</div>
 
 <div id="header">
   <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px;">
@@ -902,6 +924,38 @@ locateBtn.addEventListener('click', () => {
     nearestInfo.textContent = 'Could not get your location — check location permissions for this site.';
   }, { enableHighAccuracy: true, timeout: 10000 });
 });
+
+// "Add to Home Screen" suggestion — different instructions per platform, shown once
+(function(){
+  const isStandalone = window.navigator.standalone === true ||
+    window.matchMedia('(display-mode: standalone)').matches;
+  const alreadyDismissed = localStorage.getItem('hideInstallBanner') === '1';
+
+  if(isStandalone || alreadyDismissed) return;
+
+  const ua = navigator.userAgent || '';
+  const isIOS = /iPad|iPhone|iPod/.test(ua) ||
+    (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1); // iPadOS
+  const isAndroid = /Android/.test(ua);
+
+  const msgEl = document.getElementById('installMsg');
+  if(isIOS){
+    msgEl.innerHTML = 'Add this to your <b>Home Screen</b>: tap the Share icon (⬆️ box with arrow) at the bottom of Safari, then tap <b>"Add to Home Screen."</b>';
+  } else if(isAndroid){
+    msgEl.innerHTML = 'Add this to your <b>Home Screen</b>: tap the ⋮ menu (top-right in Chrome), then tap <b>"Add to Home screen"</b> or <b>"Install app."</b>';
+  } else {
+    msgEl.innerHTML = 'On your phone, look for <b>"Add to Home Screen"</b> or <b>"Install"</b> in your browser\'s menu for one-tap access next time.';
+  }
+
+  setTimeout(() => {
+    document.getElementById('installBanner').classList.add('show');
+  }, 1500);
+
+  document.getElementById('installClose').addEventListener('click', () => {
+    document.getElementById('installBanner').classList.remove('show');
+    localStorage.setItem('hideInstallBanner', '1');
+  });
+})();
 </script>
 </body>
 </html>
