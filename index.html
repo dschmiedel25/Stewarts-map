@@ -10,7 +10,8 @@
 <script type="module">
   import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
   import {
-    getFirestore, doc, getDoc, setDoc, increment, arrayUnion
+    getFirestore, doc, getDoc, setDoc, increment, arrayUnion,
+    collection, addDoc, query, where, getDocs
   } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 
   const firebaseConfig = {
@@ -27,31 +28,45 @@
   const db = getFirestore(fbApp);
 
   // Expose just what the rest of the (non-module) page script needs
-  window.__fb = { db, doc, getDoc, setDoc, increment, arrayUnion };
+  window.__fb = { db, doc, getDoc, setDoc, increment, arrayUnion, collection, addDoc, query, where, getDocs };
 </script>
 <style>
   :root{
     --charcoal:#1c1c1e; --amber:#f5a623; --cream:#fdf6e9; --green:#2f6b3c;
+    --header-grad-top:#161616; --muted:#c9c2b3; --panel-bg:rgba(28,28,30,.92);
+    --panel-border:#444; --placeholder:#aaa;
+  }
+  html[data-theme="light"]{
+    --charcoal:#f3efe3; --cream:#1c1c1e; --header-grad-top:#ffffff;
+    --muted:#555; --panel-bg:rgba(255,255,255,.92); --panel-border:#ccc; --placeholder:#888;
   }
   *{box-sizing:border-box;}
   html, body{margin:0;height:100%;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;background:var(--charcoal);color:var(--cream);}
   body{display:flex;flex-direction:column;}
   #header{
     flex:none;
-    padding:14px 16px 10px;background:linear-gradient(180deg,#161616,#1c1c1e);
+    padding:14px 16px 10px;background:linear-gradient(180deg,var(--header-grad-top),var(--charcoal));
     border-bottom:2px solid var(--amber);
   }
   #header h1{margin:0;font-size:23px;letter-spacing:.3px;}
-  #header p{margin:6px 0 0;font-size:15.5px;color:#c9c2b3;line-height:1.4;}
+  #header p{margin:6px 0 0;font-size:15.5px;color:var(--muted);line-height:1.4;}
   #mapWrap{position:relative;flex:1 1 auto;min-height:0;}
   #map{position:absolute;inset:0;}
+  #map.dark-map-tiles .leaflet-tile-pane{
+    filter: invert(1) hue-rotate(180deg) brightness(0.95) contrast(0.9);
+  }
   .leaflet-popup-content-wrapper{background:#fffaf0;border-radius:10px;}
   .popup-inner{min-width:250px;font-size:16px;}
   .popup-inner h3{margin:0 0 6px;font-size:19px;color:#1c1c1e;}
   .popup-inner .addr{color:#666;font-size:14px;margin-bottom:10px;}
   .directions-btn{
     display:inline-block;background:#1e88e5;color:#fff;text-decoration:none;
-    font-size:13.5px;font-weight:700;padding:6px 12px;border-radius:6px;margin-bottom:8px;
+    font-size:13.5px;font-weight:700;padding:6px 12px;border-radius:6px;
+  }
+  .popup-actions{display:flex;gap:8px;margin-bottom:8px;flex-wrap:wrap;}
+  .share-btn{
+    background:#666;color:#fff;border:none;font-size:13.5px;font-weight:700;
+    padding:6px 12px;border-radius:6px;cursor:pointer;
   }
   .rating-row{margin:10px 0;}
   .rating-label{font-weight:600;font-size:15px;color:#333;display:block;margin-bottom:4px;}
@@ -73,25 +88,25 @@
     font-size:15px;font-weight:700;padding:9px 14px;cursor:pointer;flex:none;
   }
   #legend{
-    position:absolute;top:10px;left:10px;z-index:500;background:rgba(28,28,30,.92);
-    padding:10px 12px;border-radius:8px;font-size:14px;line-height:1.8;border:1px solid #444;
+    position:absolute;top:10px;left:10px;z-index:500;background:var(--panel-bg);
+    padding:10px 12px;border-radius:8px;font-size:14px;line-height:1.8;border:1px solid var(--panel-border);
   }
   #searchBox{
     position:absolute;top:10px;right:10px;z-index:500;
-    display:flex;align-items:center;background:rgba(28,28,30,.92);border:1px solid #444;
+    display:flex;align-items:center;background:var(--panel-bg);border:1px solid var(--panel-border);
     border-radius:8px;padding:6px 10px;max-width:56%;
   }
   #searchInput{
     background:transparent;border:none;color:var(--cream);font-size:16px;padding:6px 4px;
     outline:none;width:100%;
   }
-  #searchInput::placeholder{color:#aaa;}
+  #searchInput::placeholder{color:var(--placeholder);}
   #searchClear{
-    background:none;border:none;color:#aaa;font-size:20px;cursor:pointer;padding:0 6px;line-height:1;
+    background:none;border:none;color:var(--placeholder);font-size:20px;cursor:pointer;padding:0 6px;line-height:1;
   }
   #searchCount{
-    position:absolute;top:60px;right:10px;z-index:500;font-size:13.5px;color:#c9c2b3;
-    background:rgba(28,28,30,.85);padding:4px 10px;border-radius:6px;display:none;
+    position:absolute;top:60px;right:10px;z-index:500;font-size:13.5px;color:var(--muted);
+    background:var(--panel-bg);padding:4px 10px;border-radius:6px;display:none;
   }
   .dot{display:inline-block;width:12px;height:12px;border-radius:50%;margin-right:6px;}
   #locateBtn{
@@ -102,14 +117,14 @@
   }
   #nearestInfo{
     position:absolute;top:162px;right:10px;z-index:500;
-    background:rgba(28,28,30,.95);color:var(--cream);border:1px solid #2196f3;
+    background:var(--panel-bg);color:var(--cream);border:1px solid #2196f3;
     border-radius:8px;padding:10px 14px;font-size:15px;max-width:240px;display:none;
     cursor:pointer;line-height:1.4;
   }
   #nearestInfo b{color:var(--amber);}
   #installBanner{
     position:fixed;left:0;right:0;bottom:0;z-index:2000;
-    background:#161616;border-top:2px solid var(--amber);
+    background:var(--header-grad-top);border-top:2px solid var(--amber);
     padding:14px 16px calc(14px + env(safe-area-inset-bottom));
     display:none;align-items:flex-start;gap:12px;
     box-shadow:0 -4px 16px rgba(0,0,0,.5);
@@ -132,13 +147,17 @@
 </div>
 
 <div id="header">
-  <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px;">
+  <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;">
     <h1 style="margin:0;">🚽 Stewart's Bathroom Report</h1>
-    <a href="https://cash.app/$BathroomReport" target="_blank" rel="noopener" style="flex:none;background:#00C244;color:#fff;text-decoration:none;font-weight:700;font-size:14px;padding:9px 12px;border-radius:8px;white-space:nowrap;">💵 Cash App</a>
+    <div style="display:flex;gap:6px;flex:none;">
+      <button id="themeToggle" style="flex:none;background:var(--panel-bg);border:1px solid var(--panel-border);color:var(--cream);font-size:16px;padding:8px 10px;border-radius:8px;cursor:pointer;">🌙</button>
+      <a href="https://cash.app/$BathroomReport" target="_blank" rel="noopener" style="flex:none;background:#00C244;color:#fff;text-decoration:none;font-weight:700;font-size:14px;padding:9px 12px;border-radius:8px;white-space:nowrap;">💵 Cash App</a>
+    </div>
   </div>
   <p>Tap a pin to rate the store &amp; bathroom.</p>
   <p style="margin-top:4px;">Missing a location? <a href="mailto:missingbathrooms@yahoo.com?subject=Missing%20Stewart%27s%20Location&body=Store%20address%20or%20cross%20streets%3A%0A%0A" style="color:var(--amber);">Send the store location</a></p>
   <p id="achievementBadge" style="margin-top:6px;font-weight:600;color:var(--amber);">🏆 Rate a spot to start earning badges</p>
+  <p id="weeklyRecap" style="margin-top:4px;font-size:14px;color:var(--muted);"></p>
 </div>
 
 <div id="mapWrap">
@@ -372,12 +391,46 @@ const seedLocations = [
 {"n":"W Main St, Waterville","lat":42.930984,"lng":-75.381381,"addr":"124 W Main St, Waterville, NY 13480","id":"waterville-wmainst","num":"132"}
 ];
 
+// Theme: defaults to the phone's system light/dark setting, but a manual toggle overrides it
+function applyTheme(theme){
+  document.documentElement.setAttribute('data-theme', theme);
+  const btn = document.getElementById('themeToggle');
+  if(btn) btn.textContent = theme === 'light' ? '☀️' : '🌙';
+  if(typeof setMapTilesForTheme === 'function') setMapTilesForTheme(theme);
+}
+document.getElementById('themeToggle').addEventListener('click', () => {
+  const current = document.documentElement.getAttribute('data-theme') || 'dark';
+  const next = current === 'light' ? 'dark' : 'light';
+  localStorage.setItem('theme', next);
+  applyTheme(next);
+});
+
 const map = L.map('map', { zoomControl: false }).setView([42.75, -73.80], 12);
 L.control.zoom({ position: 'bottomright' }).addTo(map);
+
+// Single tile source (the one we know reliably works) — dark mode is done with a CSS
+// color-invert trick on the tile layer itself, rather than depending on a second external
+// tile server that may be blocked, rate-limited, or require an account.
 L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
   attribution: '&copy; OpenStreetMap contributors',
   maxZoom: 19
 }).addTo(map);
+
+function setMapTilesForTheme(theme){
+  const mapEl = document.getElementById('map');
+  if(theme === 'light'){
+    mapEl.classList.remove('dark-map-tiles');
+  } else {
+    mapEl.classList.add('dark-map-tiles');
+  }
+}
+
+// Now that map + tiles exist, apply the actual initial theme (this triggers the right tile set too)
+(function(){
+  const saved = localStorage.getItem('theme');
+  const systemPrefersLight = window.matchMedia && window.matchMedia('(prefers-color-scheme: light)').matches;
+  applyTheme(saved || (systemPrefersLight ? 'light' : 'dark'));
+})();
 
 let ratingsCache = {};
 
@@ -551,18 +604,58 @@ async function addTip(id, text){
   try{
     const {db, doc, setDoc, arrayUnion} = await fb();
     await setDoc(doc(db, 'tips', id), { tips: arrayUnion(text) }, { merge: true });
+    logActivity('tip');
     return true;
   }catch(e){
     return false;
   }
 }
 
+// Weekly recap — lightweight activity log, just enough to show "X new this week"
+async function logActivity(type){
+  try{
+    const {db, collection, addDoc} = await fb();
+    await addDoc(collection(db, 'activity'), { type, ts: Date.now() });
+  }catch(e){
+    // non-critical — recap will just undercount slightly if this fails
+  }
+}
+
+async function loadWeeklyRecap(){
+  try{
+    const {db, collection, query, where, getDocs} = await fb();
+    const cutoff = Date.now() - 7 * 24 * 60 * 60 * 1000;
+    const q = query(collection(db, 'activity'), where('ts', '>=', cutoff));
+    const snap = await getDocs(q);
+    let ratings = 0, tips = 0;
+    snap.forEach(d => {
+      const t = d.data().type;
+      if(t === 'rating') ratings++;
+      else if(t === 'tip') tips++;
+    });
+    const el = document.getElementById('weeklyRecap');
+    if(el){
+      if(ratings === 0 && tips === 0){
+        el.textContent = '';
+      } else {
+        el.textContent = `📈 This week: ${ratings} new rating${ratings===1?'':'s'}, ${tips} new tip${tips===1?'':'s'}`;
+      }
+    }
+  }catch(e){
+    // silently skip — recap is a nice-to-have, not critical
+  }
+}
+
 function popupHtml(loc, agg, myVote){
   const dirUrl = `https://www.google.com/maps/dir/?api=1&destination=${loc.lat},${loc.lng}`;
+  const shareUrl = `${location.origin}${location.pathname}?loc=${encodeURIComponent(loc.id)}`;
   return `<div class="popup-inner" data-locid="${loc.id}">
     <h3>${loc.n}</h3>
     <div class="addr">${loc.addr}${loc.num ? ' &middot; Shop #' + loc.num : ''}</div>
-    <a href="${dirUrl}" target="_blank" rel="noopener" class="directions-btn">🧭 Directions</a>
+    <div class="popup-actions">
+      <a href="${dirUrl}" target="_blank" rel="noopener" class="directions-btn">🧭 Directions</a>
+      <button class="share-btn" data-shareurl="${shareUrl}" data-sharename="${loc.n.replace(/"/g,'&quot;')}">🔗 Share</button>
+    </div>
     <div class="rating-row">
       <span class="rating-label">Store — avg ${avgStr(agg.storeSum, agg.storeCount)}★ (${agg.storeCount} ${agg.storeCount===1?'rating':'ratings'})</span>
       ${starsHtml(loc.id,'store',myVote.store)}
@@ -598,8 +691,31 @@ function addMarker(loc){
   marker.on('popupopen', () => {
     attachStarHandlers(loc);
     attachTipHandlers(loc);
+    attachShareHandler(loc);
   });
   markers[loc.id] = marker;
+}
+
+function attachShareHandler(loc){
+  const btn = document.querySelector(`.popup-inner[data-locid="${loc.id}"] .share-btn`);
+  if(!btn) return;
+  const newBtn = btn.cloneNode(true); // avoid stacking duplicate listeners across reopens
+  btn.parentNode.replaceChild(newBtn, btn);
+  newBtn.addEventListener('click', async () => {
+    const url = newBtn.dataset.shareurl;
+    const name = newBtn.dataset.sharename;
+    if(navigator.share){
+      try{
+        await navigator.share({ title: `${name} — Stewart's Bathroom Report`, url });
+      }catch(e){ /* user cancelled the share sheet — no action needed */ }
+    } else if(navigator.clipboard){
+      try{
+        await navigator.clipboard.writeText(url);
+        newBtn.textContent = '✅ Link copied';
+        setTimeout(() => { newBtn.textContent = '🔗 Share'; }, 2000);
+      }catch(e){ /* clipboard blocked — nothing we can do silently */ }
+    }
+  });
 }
 
 // Fetch every pin's real ratings in the background so the map colors itself in at a glance —
@@ -644,6 +760,7 @@ function currentTier(count){
   }
   return tier;
 }
+let lastKnownTierMin = 0;
 function updateAchievementBadge(){
   const badge = document.getElementById('achievementBadge');
   if(!badge) return;
@@ -652,6 +769,10 @@ function updateAchievementBadge(){
   if(!tier){
     badge.textContent = `🏆 Rate a spot to start earning badges`;
   } else {
+    if(tier.min > lastKnownTierMin && lastKnownTierMin !== 0 && navigator.vibrate){
+      navigator.vibrate([30, 60, 30, 60, 60]); // little celebration buzz for a new tier
+    }
+    lastKnownTierMin = tier.min;
     const nextTier = ACHIEVEMENT_TIERS.find(t => t.min > count);
     const nextText = nextTier ? ` (${nextTier.min - count} more to "${nextTier.label}")` : '';
     badge.textContent = `🏆 ${count} rated — ${tier.label}${nextText}`;
@@ -695,6 +816,7 @@ function attachStarHandlers(loc){
     starGroup.querySelectorAll('span').forEach(starEl => {
       starEl.addEventListener('click', async () => {
         const val = parseInt(starEl.dataset.val);
+        if(navigator.vibrate) navigator.vibrate(15);
         const note = document.getElementById('note-'+loc.id);
         if(note) note.textContent = 'Checking you\'re nearby...';
 
@@ -737,6 +859,7 @@ function attachStarHandlers(loc){
 
         const okAgg = await bumpAggregate(loc.id, sumKey, sumDelta, countKey, countDelta);
         const okVote = await saveMyVote(loc.id, myVote);
+        if(okAgg) logActivity('rating');
         if(note) note.textContent = (okAgg && okVote) ? 'Saved ✓ — visible to everyone' : 'Save failed';
 
         // refresh the label text with new average
@@ -808,6 +931,19 @@ async function attachTipHandlers(loc){
 // Load all seed locations — this is now instant since no storage calls happen until a pin is tapped
 seedLocations.forEach(loc => addMarker(loc));
 loadAllRatings();
+loadWeeklyRecap();
+
+// If this page was opened via a shared link (?loc=xyz), jump straight to that pin
+(function(){
+  const params = new URLSearchParams(window.location.search);
+  const targetId = params.get('loc');
+  if(!targetId) return;
+  const target = seedLocations.find(l => l.id === targetId);
+  if(target && markers[targetId]){
+    map.setView([target.lat, target.lng], 16);
+    markers[targetId].openPopup();
+  }
+})();
 
 // Resize every pin whenever the zoom level changes
 map.on('zoomend', () => {
