@@ -32,14 +32,17 @@
     --charcoal:#1c1c1e; --amber:#f5a623; --cream:#fdf6e9; --green:#2f6b3c;
   }
   *{box-sizing:border-box;}
-  body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;background:var(--charcoal);color:var(--cream);}
+  html, body{margin:0;height:100%;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;background:var(--charcoal);color:var(--cream);}
+  body{display:flex;flex-direction:column;}
   #header{
+    flex:none;
     padding:14px 16px 10px;background:linear-gradient(180deg,#161616,#1c1c1e);
     border-bottom:2px solid var(--amber);
   }
   #header h1{margin:0;font-size:19px;letter-spacing:.3px;}
   #header p{margin:4px 0 0;font-size:12.5px;color:#c9c2b3;}
-  #map{position:absolute;top:76px;bottom:0;left:0;right:0;}
+  #mapWrap{position:relative;flex:1 1 auto;min-height:0;}
+  #map{position:absolute;inset:0;}
   .leaflet-popup-content-wrapper{background:#fffaf0;border-radius:10px;}
   .popup-inner{min-width:220px;font-size:13px;}
   .popup-inner h3{margin:0 0 4px;font-size:15px;color:#1c1c1e;}
@@ -52,11 +55,11 @@
   .stars span.filled{color:var(--amber);}
   .save-note{font-size:11px;color:#2f6b3c;margin-top:4px;height:14px;}
   #legend{
-    position:absolute;top:84px;left:10px;z-index:500;background:rgba(28,28,30,.9);
+    position:absolute;top:10px;left:10px;z-index:500;background:rgba(28,28,30,.9);
     padding:8px 10px;border-radius:8px;font-size:11px;line-height:1.6;border:1px solid #444;
   }
   #searchBox{
-    position:absolute;top:84px;right:10px;z-index:500;
+    position:absolute;top:10px;right:10px;z-index:500;
     display:flex;align-items:center;background:rgba(28,28,30,.92);border:1px solid #444;
     border-radius:8px;padding:4px 8px;max-width:52%;
   }
@@ -69,7 +72,7 @@
     background:none;border:none;color:#aaa;font-size:16px;cursor:pointer;padding:0 4px;line-height:1;
   }
   #searchCount{
-    position:absolute;top:128px;right:10px;z-index:500;font-size:11px;color:#c9c2b3;
+    position:absolute;top:54px;right:10px;z-index:500;font-size:11px;color:#c9c2b3;
     background:rgba(28,28,30,.85);padding:3px 8px;border-radius:6px;display:none;
   }
   .dot{display:inline-block;width:9px;height:9px;border-radius:50%;margin-right:5px;}
@@ -92,12 +95,19 @@
 
 <div id="header">
   <h1>🚽 Stewart's Bathroom Report</h1>
-  <p>Tap a pin to rate the store &amp; bathroom. Averages are shared with everyone who opens this map.</p>
+  <p>Tap a pin to rate the store &amp; bathroom.</p>
+  <p style="margin-top:4px;">Missing a location? <a href="mailto:missingbathrooms@yahoo.com?subject=Missing%20Stewart%27s%20Location&body=Store%20address%20or%20cross%20streets%3A%0A%0A" style="color:var(--amber);">Send the store location</a></p>
 </div>
 
+<div id="mapWrap">
 <div id="legend">
-  <div><span class="dot" style="background:#4caf50"></span>Has ratings</div>
-  <div><span class="dot" style="background:#888"></span>No ratings yet</div>
+  <div><span class="dot" style="background:#1e88e5"></span>5★ bathroom</div>
+  <div><span class="dot" style="background:#43a047"></span>4★</div>
+  <div><span class="dot" style="background:#fdd835"></span>3★</div>
+  <div><span class="dot" style="background:#fb8c00"></span>2★</div>
+  <div><span class="dot" style="background:#e53935"></span>1★</div>
+  <div><span class="dot" style="background:#8a8a8a"></span>Not yet rated</div>
+  <div><span class="dot" style="background:#8e24aa"></span>Ring = reviewed</div>
 </div>
 
 <div id="searchBox">
@@ -109,6 +119,7 @@
 <div id="map"></div>
 <button id="locateBtn">📍 My Location</button>
 <div id="nearestInfo"></div>
+</div>
 
 <script>
 const seedLocations = [
@@ -296,10 +307,13 @@ const seedLocations = [
 {"n":"Partition St, Rensselaer","lat":42.645700,"lng":-73.739145,"addr":"12 Partition St, Rensselaer, NY 12144","id":"rensselaer-partitionst"},
 {"n":"US-9W, Selkirk","lat":42.541085,"lng":-73.805501,"addr":"1344 US-9W, Selkirk, NY 12158","id":"selkirk-us9w"},
 {"n":"Frontage Rd, Glenmont","lat":42.620051,"lng":-73.783102,"addr":"21 Frontage Rd, Glenmont, NY 12077","id":"glenmont-frontagerd"},
-{"n":"US-20, Nassau","lat":42.518044,"lng":-73.618028,"addr":"3516 US-20, Nassau, NY 12123","id":"nassau-us20"}
+{"n":"US-20, Nassau","lat":42.518044,"lng":-73.618028,"addr":"3516 US-20, Nassau, NY 12123","id":"nassau-us20"},
+{"n":"Western Turnpike, Duanesburg","lat":42.761552,"lng":-74.132736,"addr":"5060 Western Turnpike, Duanesburg, NY 12056","id":"duanesburg-westernturnpike"},
+{"n":"Helderberg Trail, East Berne","lat":42.613278,"lng":-74.066814,"addr":"788 Helderberg Trail, East Berne, NY 12059","id":"eastberne-helderbergtrail"}
 ];
 
-const map = L.map('map').setView([42.75, -73.80], 10);
+const map = L.map('map', { zoomControl: false }).setView([42.75, -73.80], 11);
+L.control.zoom({ position: 'bottomright' }).addTo(map);
 L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
   attribution: '&copy; OpenStreetMap contributors',
   maxZoom: 19
@@ -316,17 +330,45 @@ function starsHtml(id, type, current){
   return s;
 }
 
-function markerColor(id){
-  const agg = ratingsCache[id];
-  return (agg && (agg.storeCount > 0 || agg.bathroomCount > 0)) ? '#4caf50' : '#888';
+// Color the dot itself by the bathroom average, matching star-rating tiers 1-5
+function bathroomColor(agg){
+  if(!agg || agg.bathroomCount === 0) return '#8a8a8a';
+  const avg = agg.bathroomSum / agg.bathroomCount;
+  const rounded = Math.max(1, Math.min(5, Math.round(avg)));
+  const colors = {
+    1: '#e53935', // red
+    2: '#fb8c00', // orange
+    3: '#fdd835', // yellow
+    4: '#43a047', // green
+    5: '#1e88e5'  // blue
+  };
+  return colors[rounded];
+}
+
+const REVIEWED_RING_COLOR = '#8e24aa'; // purple halo for any pin with at least one bathroom rating
+
+// Marker size scales with zoom level so pins are easy to see and tap whether zoomed out or in
+function sizesForZoom(zoom){
+  if(zoom >= 15) return {unrated:20, rated:30};
+  if(zoom >= 13) return {unrated:16, rated:25};
+  if(zoom >= 11) return {unrated:13, rated:20};
+  if(zoom >= 9)  return {unrated:10, rated:15};
+  return {unrated:8, rated:12};
 }
 
 function makeIcon(id){
+  const agg = ratingsCache[id] || emptyAgg();
+  const rated = agg.bathroomCount > 0;
+  const color = bathroomColor(agg);
+  const sizes = sizesForZoom(map.getZoom());
+  const size = rated ? sizes.rated : sizes.unrated;
+  // Reviewed pins get a purple halo ring around them so they stand out from unrated ones
+  const ring = rated ? `box-shadow:0 0 0 4px ${REVIEWED_RING_COLOR}99, 0 0 5px rgba(0,0,0,.6);` : `box-shadow:0 0 3px rgba(0,0,0,.6);`;
   return L.divIcon({
     className:'',
-    html:'<div style="background:'+markerColor(id)+';width:16px;height:16px;border-radius:50%;border:2px solid #fff;box-shadow:0 0 3px rgba(0,0,0,.6);"></div>',
-    iconSize:[16,16],
-    iconAnchor:[8,8]
+    html:`<div style="background:${color};width:${size}px;height:${size}px;border-radius:50%;border:2px solid #fff;${ring}"></div>`,
+    iconSize:[size, size],
+    iconAnchor:[size/2, size/2]
   });
 }
 
@@ -439,36 +481,35 @@ function popupHtml(loc, agg, myVote){
   </div>`;
 }
 
-function loadingPopupHtml(loc){
-  return `<div class="popup-inner" data-locid="${loc.id}">
-    <h3>${loc.n}</h3>
-    <div class="addr">${loc.addr}${loc.num ? ' &middot; Shop #' + loc.num : ''}</div>
-    <div class="save-note" style="color:#888;">Loading ratings…</div>
-  </div>`;
-}
-
 const markers = {};
 const myVoteCache = {};
 const loadedIds = new Set();
 
 function addMarker(loc){
-  // Nothing is fetched from storage here — that only happens when the popup is opened.
-  // This keeps page-load fast and avoids tripping the storage rate limit on 100+ pins at once.
+  // Start every pin with placeholder (unrated-looking) data — colors/rings fill in as real data arrives
+  ratingsCache[loc.id] = ratingsCache[loc.id] || emptyAgg();
+  myVoteCache[loc.id] = myVoteCache[loc.id] || emptyVote();
   const marker = L.marker([loc.lat, loc.lng], {icon: makeIcon(loc.id)}).addTo(map);
-  marker.bindPopup(loadingPopupHtml(loc));
-  marker.on('popupopen', async () => {
-    if(!loadedIds.has(loc.id)){
-      const agg = await loadAggregate(loc.id);
-      const myVote = await loadMyVote(loc.id);
-      ratingsCache[loc.id] = agg;
-      myVoteCache[loc.id] = myVote;
-      loadedIds.add(loc.id);
-      marker.setIcon(makeIcon(loc.id));
-    }
-    marker.setPopupContent(popupHtml(loc, ratingsCache[loc.id], myVoteCache[loc.id]));
-    attachStarHandlers(loc);
-  });
+  marker.bindPopup(popupHtml(loc, ratingsCache[loc.id], myVoteCache[loc.id]));
+  marker.on('popupopen', () => attachStarHandlers(loc));
   markers[loc.id] = marker;
+}
+
+// Fetch every pin's real ratings in the background so the map colors itself in at a glance —
+// Firebase's free tier handles this fine, unlike the old sandboxed rate limit.
+async function loadAllRatings(){
+  await Promise.all(seedLocations.map(async loc => {
+    const [agg, myVote] = await Promise.all([loadAggregate(loc.id), loadMyVote(loc.id)]);
+    ratingsCache[loc.id] = agg;
+    myVoteCache[loc.id] = myVote;
+    loadedIds.add(loc.id);
+    const marker = markers[loc.id];
+    if(marker){
+      marker.setIcon(makeIcon(loc.id));
+      marker.setPopupContent(popupHtml(loc, agg, myVote));
+      if(marker.isPopupOpen()) attachStarHandlers(loc);
+    }
+  }));
 }
 
 function attachStarHandlers(loc){
@@ -527,6 +568,15 @@ function attachStarHandlers(loc){
 
 // Load all seed locations — this is now instant since no storage calls happen until a pin is tapped
 seedLocations.forEach(loc => addMarker(loc));
+loadAllRatings();
+
+// Resize every pin whenever the zoom level changes
+map.on('zoomend', () => {
+  seedLocations.forEach(loc => {
+    const m = markers[loc.id];
+    if(m) m.setIcon(makeIcon(loc.id));
+  });
+});
 
 // Search / filter by store number, name, address, or town
 function locMatches(loc, q){
