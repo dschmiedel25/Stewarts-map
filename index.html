@@ -4,8 +4,8 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
 <title>Stewart's Bathroom Report</title>
-<link rel="icon" href="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAxMDAgMTAwIj48dGV4dCB4PSI1MCIgeT0iNzUiIGZvbnQtc2l6ZT0iNzUiIHRleHQtYW5jaG9yPSJtaWRkbGUiPvCfmr08L3RleHQ+PC9zdmc+">
-<link rel="apple-touch-icon" href="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAxMDAgMTAwIj48dGV4dCB4PSI1MCIgeT0iNzUiIGZvbnQtc2l6ZT0iNzUiIHRleHQtYW5jaG9yPSJtaWRkbGUiPvCfmr08L3RleHQ+PC9zdmc+">
+<link rel="icon" href="icon-512.png">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css" />
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
 <script type="module">
@@ -97,7 +97,15 @@
   #legend{
     position:absolute;top:10px;left:10px;z-index:500;background:var(--panel-bg);
     padding:8px 10px;border-radius:8px;font-size:12px;line-height:1.6;border:1px solid var(--panel-border);
+    max-width:150px;
   }
+  #legendToggle{
+    cursor:pointer;font-weight:700;color:var(--cream);white-space:nowrap;
+    display:flex;justify-content:space-between;align-items:center;gap:8px;
+  }
+  #legendBody{margin-top:6px;}
+  #legendBody.collapsed{display:none;}
+  #legendToggle.collapsed-toggle #legendArrow{transform:rotate(-90deg);display:inline-block;}
   #searchBox{
     position:absolute;top:10px;right:10px;z-index:500;
     display:flex;align-items:center;background:var(--panel-bg);border:1px solid var(--panel-border);
@@ -189,13 +197,16 @@
 
 <div id="mapWrap">
 <div id="legend">
-  <div><span class="dot" style="background:#1e88e5"></span>5★ bathroom</div>
-  <div><span class="dot" style="background:#43a047"></span>4★</div>
-  <div><span class="dot" style="background:#fdd835"></span>3★</div>
-  <div><span class="dot" style="background:#fb8c00"></span>2★</div>
-  <div><span class="dot" style="background:#e53935"></span>1★</div>
-  <div><span class="dot" style="background:#8a8a8a"></span>Not yet rated</div>
-  <div>◆ Diamond = you reviewed it</div>
+  <div id="legendToggle">🔑 Key <span id="legendArrow">▾</span></div>
+  <div id="legendBody">
+    <div><span class="dot" style="background:#1e88e5"></span>5★ bathroom</div>
+    <div><span class="dot" style="background:#43a047"></span>4★</div>
+    <div><span class="dot" style="background:#fdd835"></span>3★</div>
+    <div><span class="dot" style="background:#fb8c00"></span>2★</div>
+    <div><span class="dot" style="background:#e53935"></span>1★</div>
+    <div><span class="dot" style="background:#8a8a8a"></span>Not yet rated</div>
+    <div>◆ Diamond = you reviewed it</div>
+  </div>
 </div>
 
 <div id="searchBox">
@@ -462,6 +473,26 @@ document.getElementById('themeToggle').addEventListener('click', () => {
   applyTheme(next);
 });
 
+// Collapsible legend — defaults to collapsed on repeat visits to save screen space, remembers choice
+(function(){
+  const toggle = document.getElementById('legendToggle');
+  const body = document.getElementById('legendBody');
+  const arrow = document.getElementById('legendArrow');
+
+  function setCollapsed(collapsed){
+    body.classList.toggle('collapsed', collapsed);
+    arrow.style.transform = collapsed ? 'rotate(-90deg)' : 'rotate(0deg)';
+    localStorage.setItem('legendCollapsed', collapsed ? '1' : '0');
+  }
+
+  const saved = localStorage.getItem('legendCollapsed');
+  setCollapsed(saved === null ? false : saved === '1'); // expanded by default on first visit
+
+  toggle.addEventListener('click', () => {
+    setCollapsed(!body.classList.contains('collapsed'));
+  });
+})();
+
 const map = L.map('map', { zoomControl: false }).setView([42.75, -73.80], 12);
 L.control.zoom({ position: 'bottomright' }).addTo(map);
 
@@ -476,10 +507,13 @@ map.on('popupopen', () => {
   document.getElementById('nearestInfo').style.display = 'none';
   document.getElementById('missingBtn').style.display = 'none';
   document.getElementById('missingPanel').classList.remove('show');
+  document.getElementById('legendBody').classList.add('collapsed');
 });
 map.on('popupclose', () => {
   document.getElementById('locateBtn').style.display = '';
   document.getElementById('missingBtn').style.display = '';
+  const wasCollapsed = localStorage.getItem('legendCollapsed') === '1';
+  if(!wasCollapsed) document.getElementById('legendBody').classList.remove('collapsed');
 });
 
 // Single tile source (the one we know reliably works) — dark mode is done with a CSS
