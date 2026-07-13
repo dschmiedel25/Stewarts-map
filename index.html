@@ -107,7 +107,7 @@
   <div><span class="dot" style="background:#fb8c00"></span>2★</div>
   <div><span class="dot" style="background:#e53935"></span>1★</div>
   <div><span class="dot" style="background:#8a8a8a"></span>Not yet rated</div>
-  <div><span class="dot" style="background:#8e24aa"></span>Ring = reviewed</div>
+  <div>◆ Diamond = you reviewed it</div>
 </div>
 
 <div id="searchBox">
@@ -345,28 +345,40 @@ function bathroomColor(agg){
   return colors[rounded];
 }
 
-const REVIEWED_RING_COLOR = '#8e24aa'; // purple halo for any pin with at least one bathroom rating
-
 // Marker size scales with zoom level so pins are easy to see and tap whether zoomed out or in
 function sizesForZoom(zoom){
-  if(zoom >= 15) return {unrated:20, rated:30};
-  if(zoom >= 13) return {unrated:16, rated:25};
-  if(zoom >= 11) return {unrated:13, rated:20};
-  if(zoom >= 9)  return {unrated:10, rated:15};
-  return {unrated:8, rated:12};
+  if(zoom >= 15) return {unrated:24, rated:30};
+  if(zoom >= 13) return {unrated:20, rated:25};
+  if(zoom >= 11) return {unrated:17, rated:20};
+  if(zoom >= 9)  return {unrated:14, rated:15};
+  return {unrated:11, rated:12};
 }
 
 function makeIcon(id){
   const agg = ratingsCache[id] || emptyAgg();
-  const rated = agg.bathroomCount > 0;
+  const myVote = (typeof myVoteCache !== 'undefined' && myVoteCache[id]) || emptyVote();
+  const communityRated = agg.bathroomCount > 0;
+  const reviewedByMe = myVote.bathroom > 0;
   const color = bathroomColor(agg);
   const sizes = sizesForZoom(map.getZoom());
-  const size = rated ? sizes.rated : sizes.unrated;
-  // Reviewed pins get a purple halo ring around them so they stand out from unrated ones
-  const ring = rated ? `box-shadow:0 0 0 4px ${REVIEWED_RING_COLOR}99, 0 0 5px rgba(0,0,0,.6);` : `box-shadow:0 0 3px rgba(0,0,0,.6);`;
+  const size = communityRated ? sizes.rated : sizes.unrated;
+
+  if(reviewedByMe){
+    // Diamond shape for anything YOU'VE personally rated — same color scale, different silhouette
+    const inner = Math.round(size * 0.72);
+    return L.divIcon({
+      className:'',
+      html:`<div style="width:${size}px;height:${size}px;display:flex;align-items:center;justify-content:center;">
+              <div style="background:${color};width:${inner}px;height:${inner}px;transform:rotate(45deg);border:2px solid #fff;box-shadow:0 0 3px rgba(0,0,0,.6);"></div>
+            </div>`,
+      iconSize:[size, size],
+      iconAnchor:[size/2, size/2]
+    });
+  }
+
   return L.divIcon({
     className:'',
-    html:`<div style="background:${color};width:${size}px;height:${size}px;border-radius:50%;border:2px solid #fff;${ring}"></div>`,
+    html:`<div style="background:${color};width:${size}px;height:${size}px;border-radius:50%;border:2px solid #fff;box-shadow:0 0 3px rgba(0,0,0,.6);"></div>`,
     iconSize:[size, size],
     iconAnchor:[size/2, size/2]
   });
