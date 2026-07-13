@@ -40,6 +40,7 @@
 </style>
 </head>
 <body>
+<div id="pullIndicator" style="position:fixed;top:-60px;left:0;right:0;text-align:center;padding:14px;background:#262626;color:#f5a623;font-size:14px;font-weight:600;transition:top 0.2s ease;z-index:9999;border-bottom:2px solid #f5a623;">⬇️ Pull down to refresh</div>
 <h1>🔧 Stewart's Bathroom Report — Admin</h1>
 <p class="sub">Read-only summary of all ratings and tips. This page is not password-protected — anyone with this exact URL can view it, so don't link to it publicly.</p>
 
@@ -48,7 +49,18 @@
   <div class="stat-box"><b id="statRated">—</b>Locations with ≥1 rating</div>
   <div class="stat-box"><b id="statTips">—</b>Total tips submitted</div>
   <div class="stat-box"><b id="statReports">—</b>Reported issues</div>
+  <div class="stat-box"><b id="statMissing">—</b>Missing-location tips</div>
 </div>
+
+<h2 style="font-size:16px;margin:20px 0 8px;">📍 Missing Locations Submitted</h2>
+<table style="margin-bottom:24px;">
+  <thead>
+    <tr><th>Description</th><th>When</th><th>Action</th></tr>
+  </thead>
+  <tbody id="missingBody">
+    <tr><td colspan="3" class="loading">Loading…</td></tr>
+  </tbody>
+</table>
 
 <h2 style="font-size:16px;margin:20px 0 8px;">🚩 Reported Issues</h2>
 <table style="margin-bottom:24px;">
@@ -336,6 +348,17 @@ async function dismissReport(reportId){
   }
 }
 
+async function dismissMissing(missingId){
+  try{
+    const {db, doc, deleteDoc} = await fb();
+    await deleteDoc(doc(db, 'missingReports', missingId));
+    return true;
+  }catch(e){
+    console.error('dismiss missing report failed', e);
+    return false;
+  }
+}
+
 let allRows = [];
 
 async function loadAll(){
@@ -380,6 +403,28 @@ async function loadAll(){
         <td>${escapeHtml(r.reason || '')}</td>
         <td style="color:#999;">${when}</td>
         <td><button class="dismiss-report-btn" data-reportid="${r.id}" style="background:#444;color:#fff;border:none;border-radius:6px;padding:5px 10px;font-size:12px;cursor:pointer;">✕ Dismiss</button></td>
+      </tr>`;
+    }).join('');
+  }
+
+  const missingSnap = await getDocs(collection(db, 'missingReports'));
+  const missingList = [];
+  missingSnap.forEach(d => missingList.push({ id: d.id, ...d.data() }));
+  missingList.sort((a, b) => (b.ts || 0) - (a.ts || 0));
+  document.getElementById('statMissing').textContent = missingList.length;
+  const missingBody = document.getElementById('missingBody');
+  if(missingList.length === 0){
+    missingBody.innerHTML = '<tr><td colspan="3" class="loading">No missing-location tips yet.</td></tr>';
+  } else {
+    missingBody.innerHTML = missingList.map(m => {
+      const when = m.ts ? new Date(m.ts).toLocaleString() : '—';
+      const mapLink = (m.lat && m.lng)
+        ? `<br><a href="https://www.google.com/maps?q=${m.lat},${m.lng}" target="_blank" style="color:#90caf9;font-size:12px;">📍 View pinned location</a>`
+        : '';
+      return `<tr>
+        <td><b>${escapeHtml(m.description || '')}</b>${mapLink}</td>
+        <td style="color:#999;">${when}</td>
+        <td><button class="dismiss-missing-btn" data-missingid="${m.id}" style="background:#444;color:#fff;border:none;border-radius:6px;padding:5px 10px;font-size:12px;cursor:pointer;">✕ Dismiss</button></td>
       </tr>`;
     }).join('');
   }
@@ -497,7 +542,73 @@ document.getElementById('reportsBody').addEventListener('click', async (e) => {
   }
 });
 
+document.getElementById('missingBody').addEventListener('click', async (e) => {
+  const btn = e.target.closest('.dismiss-missing-btn');
+  if(!btn) return;
+  const missingId = btn.dataset.missingid;
+  btn.disabled = true;
+  btn.textContent = '...';
+  const ok = await dismissMissing(missingId);
+  if(ok){
+    btn.closest('tr').remove();
+    const statEl = document.getElementById('statMissing');
+    statEl.textContent = Math.max(0, parseInt(statEl.textContent || '0', 10) - 1);
+  } else {
+    alert('Could not dismiss — try again.');
+    btn.disabled = false;
+    btn.textContent = '✕ Dismiss';
+  }
+});
+
 loadAll();
+
+// Custom pull-to-refresh — regular web pages don't get this natively, so we simulate it
+(function(){
+  const indicator = document.getElementById('pullIndicator');
+  const PULL_THRESHOLD = 70;
+  const MAX_PULL = 100;
+  let touchStartY = 0;
+  let pulling = false;
+  let refreshing = false;
+
+  document.addEventListener('touchstart', (e) => {
+    if(window.scrollY === 0 && !refreshing){
+      touchStartY = e.touches[0].clientY;
+      pulling = true;
+    } else {
+      pulling = false;
+    }
+  }, { passive: true });
+
+  document.addEventListener('touchmove', (e) => {
+    if(!pulling || refreshing) return;
+    const diff = e.touches[0].clientY - touchStartY;
+    if(diff > 0 && window.scrollY === 0){
+      const pull = Math.min(diff, MAX_PULL);
+      indicator.style.top = (pull - 60) + 'px';
+      indicator.textContent = pull > PULL_THRESHOLD ? '🔄 Release to refresh' : '⬇️ Pull down to refresh';
+    }
+  }, { passive: true });
+
+  document.addEventListener('touchend', async () => {
+    if(!pulling || refreshing) return;
+    pulling = false;
+    const currentTop = parseInt(indicator.style.top || '-60', 10);
+    if(currentTop + 60 > PULL_THRESHOLD){
+      refreshing = true;
+      indicator.textContent = '🔄 Refreshing...';
+      indicator.style.top = '0px';
+      await loadAll();
+      indicator.textContent = '✅ Updated!';
+      setTimeout(() => {
+        indicator.style.top = '-60px';
+        refreshing = false;
+      }, 700);
+    } else {
+      indicator.style.top = '-60px';
+    }
+  });
+})();
 </script>
 </body>
 </html>

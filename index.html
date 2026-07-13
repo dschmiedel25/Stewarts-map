@@ -128,6 +128,26 @@
     cursor:pointer;line-height:1.4;
   }
   #nearestInfo b{color:var(--amber);}
+  #missingBtn{
+    position:absolute;bottom:76px;right:10px;z-index:500;
+    background:var(--amber);color:#1c1c1e;border:none;border-radius:50px;
+    padding:12px 16px;font-weight:700;font-size:14px;box-shadow:0 3px 10px rgba(0,0,0,.4);
+    cursor:pointer;
+  }
+  #missingPanel{
+    position:absolute;bottom:130px;right:10px;z-index:500;
+    background:#fffaf0;border-radius:10px;padding:12px 14px;width:220px;
+    box-shadow:0 4px 16px rgba(0,0,0,.5);display:none;
+  }
+  #missingPanel.show{display:block;}
+  #missingPanel .tip-input-row{display:flex;gap:6px;}
+  #missingPanel input{
+    flex:1;font-size:14px;padding:8px;border:1px solid #ccc;border-radius:6px;min-width:0;
+  }
+  #missingUseLocationBtn{
+    display:block;width:100%;margin-top:8px;background:#e3f2fd;color:#0d47a1;border:1px solid #90caf9;
+    font-size:12.5px;font-weight:700;padding:7px;border-radius:6px;cursor:pointer;
+  }
   #installBanner{
     position:fixed;left:0;right:0;bottom:0;z-index:2000;
     background:var(--header-grad-top);border-top:2px solid var(--amber);
@@ -161,7 +181,6 @@
     </div>
   </div>
   <p>Tap a pin to rate the store &amp; bathroom.</p>
-  <p style="margin-top:4px;">Missing a location? <a href="mailto:missingbathrooms@yahoo.com?subject=Missing%20Stewart%27s%20Location&body=Store%20address%20or%20cross%20streets%3A%0A%0A" style="color:var(--amber);">Send the store location</a></p>
   <p id="achievementBadge" style="margin-top:6px;font-weight:600;color:var(--amber);">🏆 Rate a spot to start earning badges</p>
   <p id="weeklyRecap" style="margin-top:4px;font-size:14px;color:var(--muted);"></p>
   <p id="streakBadge" style="margin-top:4px;font-size:14px;color:var(--muted);"></p>
@@ -187,6 +206,17 @@
 <div id="map"></div>
 <button id="locateBtn">📍 Where am I?</button>
 <div id="nearestInfo"></div>
+
+<button id="missingBtn">📍 Missing a spot?</button>
+<div id="missingPanel">
+  <div class="rating-label" style="color:#333;">What's missing?</div>
+  <div class="tip-input-row">
+    <input type="text" id="missingInput" maxlength="120" placeholder="Address or cross streets" />
+    <button class="tip-submit" id="missingSubmit">Send</button>
+  </div>
+  <button id="missingUseLocationBtn" type="button">📍 Use my current location instead</button>
+  <div class="save-note" id="missingNote"></div>
+</div>
 </div>
 
 <script>
@@ -766,6 +796,18 @@ async function logReport(loc, reason){
   }
 }
 
+async function logMissingLocation(description, coords){
+  try{
+    const {db, collection, addDoc} = await fb();
+    const doc = { description, ts: Date.now() };
+    if(coords){ doc.lat = coords.lat; doc.lng = coords.lng; }
+    await addDoc(collection(db, 'missingReports'), doc);
+    return true;
+  }catch(e){
+    return false;
+  }
+}
+
 function attachReportHandler(loc){
   const toggleBtn = document.getElementById('report-toggle-' + loc.id);
   const section = document.getElementById('report-section-' + loc.id);
@@ -793,11 +835,6 @@ function attachReportHandler(loc){
     newSubmit.textContent = 'Sending...';
 
     await logReport(loc, reason);
-
-    // Also open a pre-filled email, same inbox as the missing-location reports
-    const subject = encodeURIComponent(`Location Issue: ${loc.n}`);
-    const body = encodeURIComponent(`Location: ${loc.n}\nAddress: ${loc.addr}\nIssue: ${reason}`);
-    window.location.href = `mailto:missingbathrooms@yahoo.com?subject=${subject}&body=${body}`;
 
     if(note){ note.style.color = '#2f6b3c'; note.textContent = 'Report sent — thank you!'; }
     input.value = '';
@@ -1189,6 +1226,73 @@ locateBtn.addEventListener('click', () => {
     nearestInfo.style.display = 'block';
     nearestInfo.textContent = 'Could not get your location — check location permissions for this site.';
   }, { enableHighAccuracy: true, timeout: 10000 });
+});
+
+// Missing-location reporting — logs straight to Firestore (visible in FlushPanel), no email needed
+const missingBtn = document.getElementById('missingBtn');
+const missingPanel = document.getElementById('missingPanel');
+const missingInput = document.getElementById('missingInput');
+const missingSubmit = document.getElementById('missingSubmit');
+const missingNote = document.getElementById('missingNote');
+const missingUseLocationBtn = document.getElementById('missingUseLocationBtn');
+let capturedMissingCoords = null;
+
+missingBtn.addEventListener('click', () => {
+  missingPanel.classList.toggle('show');
+  if(missingPanel.classList.contains('show')) missingInput.focus();
+});
+
+missingUseLocationBtn.addEventListener('click', () => {
+  if(!navigator.geolocation){
+    missingNote.style.color = '#c62828';
+    missingNote.textContent = "Your browser doesn't support location.";
+    return;
+  }
+  missingUseLocationBtn.disabled = true;
+  missingUseLocationBtn.textContent = '📍 Getting your location...';
+  navigator.geolocation.getCurrentPosition((pos) => {
+    capturedMissingCoords = { lat: pos.coords.latitude, lng: pos.coords.longitude };
+    missingUseLocationBtn.textContent = '✅ Location attached';
+    missingInput.placeholder = 'Optional — add a note (e.g. "behind the gas pumps")';
+    missingUseLocationBtn.disabled = false;
+  }, () => {
+    missingUseLocationBtn.textContent = '📍 Use my current location instead';
+    missingUseLocationBtn.disabled = false;
+    missingNote.style.color = '#c62828';
+    missingNote.textContent = 'Could not get your location — check permissions.';
+  }, { enableHighAccuracy: true, timeout: 10000 });
+});
+
+async function submitMissingLocation(){
+  const description = missingInput.value.trim();
+  if(!description && !capturedMissingCoords){
+    missingNote.style.color = '#c62828';
+    missingNote.textContent = 'Type an address, or use your current location.';
+    return;
+  }
+  missingSubmit.disabled = true;
+  missingSubmit.textContent = '...';
+  const finalDescription = description || '(no description — location only)';
+  const ok = await logMissingLocation(finalDescription, capturedMissingCoords);
+  missingNote.style.color = ok ? '#2f6b3c' : '#c62828';
+  missingNote.textContent = ok ? 'Thanks — sent!' : 'Something went wrong, try again.';
+  if(ok){
+    missingInput.value = '';
+    missingInput.placeholder = 'Address or cross streets';
+    capturedMissingCoords = null;
+    missingUseLocationBtn.textContent = '📍 Use my current location instead';
+    setTimeout(() => {
+      missingPanel.classList.remove('show');
+      missingNote.textContent = '';
+    }, 1500);
+  }
+  missingSubmit.disabled = false;
+  missingSubmit.textContent = 'Send';
+}
+
+missingSubmit.addEventListener('click', submitMissingLocation);
+missingInput.addEventListener('keydown', (e) => {
+  if(e.key === 'Enter') submitMissingLocation();
 });
 
 // "Add to Home Screen" suggestion — different instructions per platform, shown once
