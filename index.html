@@ -59,15 +59,21 @@
   .popup-inner{min-width:250px;font-size:16px;}
   .popup-inner h3{margin:0 0 6px;font-size:19px;color:#1c1c1e;}
   .popup-inner .addr{color:#666;font-size:14px;margin-bottom:10px;}
-  .directions-btn{
-    display:inline-block;background:#1e88e5;color:#fff;text-decoration:none;
-    font-size:13.5px;font-weight:700;padding:6px 12px;border-radius:6px;
+  .directions-btn, .directions-btn:visited, .directions-btn:hover{
+    display:inline-block;background:#0d47a1;color:#fff !important;text-decoration:none;
+    font-size:15px;font-weight:800;padding:8px 14px;border-radius:6px;
   }
   .popup-actions{display:flex;gap:8px;margin-bottom:8px;flex-wrap:wrap;}
   .share-btn{
-    background:#666;color:#fff;border:none;font-size:13.5px;font-weight:700;
-    padding:6px 12px;border-radius:6px;cursor:pointer;
+    background:#444;color:#fff;border:none;font-size:15px;font-weight:800;
+    padding:8px 14px;border-radius:6px;cursor:pointer;
   }
+  .report-toggle-btn{
+    background:#b71c1c;color:#fff;border:none;font-size:15px;font-weight:800;
+    padding:8px 14px;border-radius:6px;cursor:pointer;
+  }
+  .report-section{margin-bottom:10px;padding:8px;background:#fdecea;border-radius:6px;}
+  .report-section .tip-input-row{display:flex;gap:8px;margin-bottom:4px;}
   .rating-row{margin:10px 0;}
   .rating-label{font-weight:600;font-size:15px;color:#333;display:block;margin-bottom:4px;}
   .star-quip{font-size:14px;font-style:italic;color:#777;margin-top:4px;min-height:18px;}
@@ -158,6 +164,7 @@
   <p style="margin-top:4px;">Missing a location? <a href="mailto:missingbathrooms@yahoo.com?subject=Missing%20Stewart%27s%20Location&body=Store%20address%20or%20cross%20streets%3A%0A%0A" style="color:var(--amber);">Send the store location</a></p>
   <p id="achievementBadge" style="margin-top:6px;font-weight:600;color:var(--amber);">🏆 Rate a spot to start earning badges</p>
   <p id="weeklyRecap" style="margin-top:4px;font-size:14px;color:var(--muted);"></p>
+  <p id="streakBadge" style="margin-top:4px;font-size:14px;color:var(--muted);"></p>
 </div>
 
 <div id="mapWrap">
@@ -673,6 +680,14 @@ function popupHtml(loc, agg, myVote){
     <div class="popup-actions">
       <a href="${dirUrl}" target="_blank" rel="noopener" class="directions-btn">🧭 Directions</a>
       <button class="share-btn" data-shareurl="${shareUrl}" data-sharename="${loc.n.replace(/"/g,'&quot;')}">🔗 Share</button>
+      <button class="report-toggle-btn" id="report-toggle-${loc.id}">🚩 Report</button>
+    </div>
+    <div class="report-section" id="report-section-${loc.id}" style="display:none;">
+      <div class="tip-input-row">
+        <input type="text" class="tip-input" id="report-input-${loc.id}" maxlength="80" placeholder="What's wrong? e.g. closed, wrong address" />
+        <button class="tip-submit" id="report-submit-${loc.id}">Send report</button>
+      </div>
+      <div class="save-note" id="report-note-${loc.id}"></div>
     </div>
     <div class="rating-row">
       <span class="rating-label">Store — avg ${avgStr(agg.storeSum, agg.storeCount)}★ (${agg.storeCount} ${agg.storeCount===1?'rating':'ratings'})</span>
@@ -710,6 +725,7 @@ function addMarker(loc){
     attachStarHandlers(loc);
     attachTipHandlers(loc);
     attachShareHandler(loc);
+    attachReportHandler(loc);
   });
   markers[loc.id] = marker;
 }
@@ -736,6 +752,59 @@ function attachShareHandler(loc){
   });
 }
 
+// Report a wrong/closed/incorrect pin — logs to Firestore (visible in FlushPanel) AND opens an email
+async function logReport(loc, reason){
+  try{
+    const {db, collection, addDoc} = await fb();
+    await addDoc(collection(db, 'reports'), {
+      locId: loc.id, locName: loc.n, addr: loc.addr, reason, ts: Date.now()
+    });
+    return true;
+  }catch(e){
+    return false;
+  }
+}
+
+function attachReportHandler(loc){
+  const toggleBtn = document.getElementById('report-toggle-' + loc.id);
+  const section = document.getElementById('report-section-' + loc.id);
+  const input = document.getElementById('report-input-' + loc.id);
+  const submitBtn = document.getElementById('report-submit-' + loc.id);
+  const note = document.getElementById('report-note-' + loc.id);
+  if(!toggleBtn || !section || !input || !submitBtn) return;
+
+  // Clone to avoid stacking duplicate listeners on reopen
+  const newToggle = toggleBtn.cloneNode(true);
+  toggleBtn.parentNode.replaceChild(newToggle, toggleBtn);
+  newToggle.addEventListener('click', () => {
+    section.style.display = section.style.display === 'none' ? 'block' : 'none';
+  });
+
+  const newSubmit = submitBtn.cloneNode(true);
+  submitBtn.parentNode.replaceChild(newSubmit, submitBtn);
+  newSubmit.addEventListener('click', async () => {
+    const reason = input.value.trim().slice(0, 80);
+    if(!reason){
+      if(note){ note.style.color = '#c62828'; note.textContent = 'Type what\'s wrong first.'; }
+      return;
+    }
+    newSubmit.disabled = true;
+    newSubmit.textContent = 'Sending...';
+
+    await logReport(loc, reason);
+
+    // Also open a pre-filled email, same inbox as the missing-location reports
+    const subject = encodeURIComponent(`Location Issue: ${loc.n}`);
+    const body = encodeURIComponent(`Location: ${loc.n}\nAddress: ${loc.addr}\nIssue: ${reason}`);
+    window.location.href = `mailto:missingbathrooms@yahoo.com?subject=${subject}&body=${body}`;
+
+    if(note){ note.style.color = '#2f6b3c'; note.textContent = 'Report sent — thank you!'; }
+    input.value = '';
+    newSubmit.disabled = false;
+    newSubmit.textContent = 'Send report';
+  });
+}
+
 // Fetch every pin's real ratings in the background so the map colors itself in at a glance —
 // Firebase's free tier handles this fine, unlike the old sandboxed rate limit.
 async function loadAllRatings(){
@@ -752,6 +821,7 @@ async function loadAllRatings(){
     }
   }));
   updateAchievementBadge();
+  renderStreakDisplay();
 }
 
 // Achievements — purely local/cosmetic, counts locations YOU'VE personally rated
@@ -778,6 +848,46 @@ function currentTier(count){
   }
   return tier;
 }
+// Streak tracking — consecutive days (this device) with at least one rating submitted
+function getTodayStr(){
+  const d = new Date();
+  return d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0');
+}
+function daysBetween(d1Str, d2Str){
+  const d1 = new Date(d1Str + 'T00:00:00');
+  const d2 = new Date(d2Str + 'T00:00:00');
+  return Math.round((d2 - d1) / (1000 * 60 * 60 * 24));
+}
+function renderStreakDisplay(){
+  const el = document.getElementById('streakBadge');
+  if(!el) return;
+  const lastActive = localStorage.getItem('streakLastDate');
+  const streak = parseInt(localStorage.getItem('streakCount') || '0', 10);
+  const today = getTodayStr();
+  if(!lastActive || streak === 0){
+    el.textContent = '';
+  } else if(daysBetween(lastActive, today) > 1){
+    el.textContent = `🔥 Streak ended at ${streak} day${streak===1?'':'s'} — rate a spot today to start a new one!`;
+  } else {
+    el.textContent = `🔥 ${streak}-day streak — rate again tomorrow to keep it going!`;
+  }
+}
+function recordStreakActivity(){
+  const today = getTodayStr();
+  const lastActive = localStorage.getItem('streakLastDate');
+  let streak = parseInt(localStorage.getItem('streakCount') || '0', 10);
+  if(lastActive === today){
+    // already counted today, no change
+  } else if(lastActive && daysBetween(lastActive, today) === 1){
+    streak += 1;
+  } else {
+    streak = 1;
+  }
+  localStorage.setItem('streakLastDate', today);
+  localStorage.setItem('streakCount', String(streak));
+  renderStreakDisplay();
+}
+
 let lastKnownTierMin = 0;
 function updateAchievementBadge(){
   const badge = document.getElementById('achievementBadge');
@@ -890,6 +1000,7 @@ function attachStarHandlers(loc){
 
         if(markers[loc.id]) markers[loc.id].setIcon(makeIcon(loc.id));
         updateAchievementBadge();
+        recordStreakActivity();
       });
     });
   });

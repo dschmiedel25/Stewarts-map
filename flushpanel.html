@@ -47,8 +47,20 @@
   <div class="stat-box"><b id="statLocations">—</b>Locations tracked</div>
   <div class="stat-box"><b id="statRated">—</b>Locations with ≥1 rating</div>
   <div class="stat-box"><b id="statTips">—</b>Total tips submitted</div>
+  <div class="stat-box"><b id="statReports">—</b>Reported issues</div>
 </div>
 
+<h2 style="font-size:16px;margin:20px 0 8px;">🚩 Reported Issues</h2>
+<table style="margin-bottom:24px;">
+  <thead>
+    <tr><th>Location</th><th>Issue</th><th>When</th></tr>
+  </thead>
+  <tbody id="reportsBody">
+    <tr><td colspan="3" class="loading">Loading…</td></tr>
+  </tbody>
+</table>
+
+<h2 style="font-size:16px;margin:20px 0 8px;">All Locations</h2>
 <input type="text" id="filterBox" placeholder="Filter by name, address, or store #..." />
 
 <table>
@@ -310,6 +322,25 @@ async function loadAll(){
   document.getElementById('statLocations').textContent = seedLocations.length;
   document.getElementById('statRated').textContent = ratedCount;
   document.getElementById('statTips').textContent = totalTips;
+
+  const reportsSnap = await getDocs(collection(db, 'reports'));
+  const reports = [];
+  reportsSnap.forEach(d => reports.push(d.data()));
+  reports.sort((a, b) => (b.ts || 0) - (a.ts || 0));
+  document.getElementById('statReports').textContent = reports.length;
+  const reportsBody = document.getElementById('reportsBody');
+  if(reports.length === 0){
+    reportsBody.innerHTML = '<tr><td colspan="3" class="loading">No reports yet.</td></tr>';
+  } else {
+    reportsBody.innerHTML = reports.map(r => {
+      const when = r.ts ? new Date(r.ts).toLocaleString() : '—';
+      return `<tr>
+        <td><b>${escapeHtml(r.locName || '')}</b><br><span style="color:#999;">${escapeHtml(r.addr || '')}</span></td>
+        <td>${escapeHtml(r.reason || '')}</td>
+        <td style="color:#999;">${when}</td>
+      </tr>`;
+    }).join('');
+  }
 
   renderTable(allRows);
 }
