@@ -47,6 +47,10 @@
   .popup-inner{min-width:250px;font-size:16px;}
   .popup-inner h3{margin:0 0 6px;font-size:19px;color:#1c1c1e;}
   .popup-inner .addr{color:#666;font-size:14px;margin-bottom:10px;}
+  .directions-btn{
+    display:inline-block;background:#1e88e5;color:#fff;text-decoration:none;
+    font-size:13.5px;font-weight:700;padding:6px 12px;border-radius:6px;margin-bottom:8px;
+  }
   .rating-row{margin:10px 0;}
   .rating-label{font-weight:600;font-size:15px;color:#333;display:block;margin-bottom:4px;}
   .star-quip{font-size:14px;font-style:italic;color:#777;margin-top:4px;min-height:18px;}
@@ -112,6 +116,7 @@
   </div>
   <p>Tap a pin to rate the store &amp; bathroom.</p>
   <p style="margin-top:4px;">Missing a location? <a href="mailto:missingbathrooms@yahoo.com?subject=Missing%20Stewart%27s%20Location&body=Store%20address%20or%20cross%20streets%3A%0A%0A" style="color:var(--amber);">Send the store location</a></p>
+  <p id="achievementBadge" style="margin-top:6px;font-weight:600;color:var(--amber);">🏆 Rate a spot to start earning badges</p>
 </div>
 
 <div id="mapWrap">
@@ -531,9 +536,11 @@ async function addTip(id, text){
 }
 
 function popupHtml(loc, agg, myVote){
+  const dirUrl = `https://www.google.com/maps/dir/?api=1&destination=${loc.lat},${loc.lng}`;
   return `<div class="popup-inner" data-locid="${loc.id}">
     <h3>${loc.n}</h3>
     <div class="addr">${loc.addr}${loc.num ? ' &middot; Shop #' + loc.num : ''}</div>
+    <a href="${dirUrl}" target="_blank" rel="noopener" class="directions-btn">🧭 Directions</a>
     <div class="rating-row">
       <span class="rating-label">Store — avg ${avgStr(agg.storeSum, agg.storeCount)}★ (${agg.storeCount} ${agg.storeCount===1?'rating':'ratings'})</span>
       ${starsHtml(loc.id,'store',myVote.store)}
@@ -544,7 +551,7 @@ function popupHtml(loc, agg, myVote){
       ${starsHtml(loc.id,'bathroom',myVote.bathroom)}
       <div class="star-quip" id="quip-bathroom-${loc.id}">${quipFor('bathroom', myVote.bathroom)}</div>
     </div>
-    <div class="save-note" id="note-${loc.id}">Your stars below — averages are shared with everyone viewing this map.</div>
+    <div class="save-note" id="note-${loc.id}"></div>
     <div class="tips-section">
       <span class="rating-label">💬 Tips from visitors</span>
       <ul class="tips-list" id="tips-list-${loc.id}"><li style="color:#999;">Loading…</li></ul>
@@ -588,6 +595,74 @@ async function loadAllRatings(){
       if(marker.isPopupOpen()) attachStarHandlers(loc);
     }
   }));
+  updateAchievementBadge();
+}
+
+// Achievements — purely local/cosmetic, counts locations YOU'VE personally rated
+const ACHIEVEMENT_TIERS = [
+  {min:1,  label:"First Flush"},
+  {min:5,  label:"Regular"},
+  {min:10, label:"Porcelain Pro"},
+  {min:25, label:"Bathroom Connoisseur"},
+  {min:50, label:"Living Legend"},
+  {min:100,label:"Stewart's Royalty"}
+];
+function countMyReviewedLocations(){
+  let count = 0;
+  for(const id in myVoteCache){
+    const v = myVoteCache[id];
+    if(v && (v.store > 0 || v.bathroom > 0)) count++;
+  }
+  return count;
+}
+function currentTier(count){
+  let tier = null;
+  for(const t of ACHIEVEMENT_TIERS){
+    if(count >= t.min) tier = t;
+  }
+  return tier;
+}
+function updateAchievementBadge(){
+  const badge = document.getElementById('achievementBadge');
+  if(!badge) return;
+  const count = countMyReviewedLocations();
+  const tier = currentTier(count);
+  if(!tier){
+    badge.textContent = `🏆 Rate a spot to start earning badges`;
+  } else {
+    const nextTier = ACHIEVEMENT_TIERS.find(t => t.min > count);
+    const nextText = nextTier ? ` (${nextTier.min - count} more to "${nextTier.label}")` : '';
+    badge.textContent = `🏆 ${count} rated — ${tier.label}${nextText}`;
+  }
+}
+
+// Verified visit — requires being physically near a location before rating it
+const VERIFY_RADIUS_MILES = 0.3;
+let lastKnownPos = null; // cached briefly so every star tap doesn't re-prompt GPS
+
+function getVerifiedPosition(){
+  const now = Date.now();
+  if(lastKnownPos && (now - lastKnownPos.ts) < 5 * 60 * 1000){
+    return Promise.resolve(lastKnownPos);
+  }
+  return new Promise((resolve) => {
+    if(!navigator.geolocation){ resolve(null); return; }
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        lastKnownPos = { lat: pos.coords.latitude, lng: pos.coords.longitude, ts: Date.now() };
+        resolve(lastKnownPos);
+      },
+      () => resolve(null),
+      { enableHighAccuracy: true, timeout: 10000 }
+    );
+  });
+}
+
+async function verifyNearby(loc){
+  const pos = await getVerifiedPosition();
+  if(!pos) return { ok: false, reason: 'no-location' };
+  const dist = milesBetween(pos.lat, pos.lng, loc.lat, loc.lng);
+  return { ok: dist <= VERIFY_RADIUS_MILES, distance: dist };
 }
 
 function attachStarHandlers(loc){
@@ -599,7 +674,19 @@ function attachStarHandlers(loc){
       starEl.addEventListener('click', async () => {
         const val = parseInt(starEl.dataset.val);
         const note = document.getElementById('note-'+loc.id);
-        if(note) note.textContent = 'Saving...';
+        if(note) note.textContent = 'Checking you\'re nearby...';
+
+        const verification = await verifyNearby(loc);
+        if(!verification.ok){
+          if(note){
+            note.style.color = '#c62828';
+            note.textContent = verification.reason === 'no-location'
+              ? '📍 Enable location to verify you\'re at this Stewart\'s before rating.'
+              : `📍 You need to be at this Stewart's to rate it (you're ${verification.distance.toFixed(1)} mi away).`;
+          }
+          return;
+        }
+        if(note){ note.style.color = ''; note.textContent = 'Saving...'; }
 
         const agg = ratingsCache[loc.id] || emptyAgg();
         const myVote = myVoteCache[loc.id] || emptyVote();
@@ -639,6 +726,7 @@ function attachStarHandlers(loc){
         }
 
         if(markers[loc.id]) markers[loc.id].setIcon(makeIcon(loc.id));
+        updateAchievementBadge();
       });
     });
   });
@@ -780,6 +868,7 @@ locateBtn.addEventListener('click', () => {
   navigator.geolocation.getCurrentPosition((pos) => {
     const { latitude, longitude } = pos.coords;
     locateBtn.textContent = '📍 Where am I?';
+    lastKnownPos = { lat: latitude, lng: longitude, ts: Date.now() };
 
     if(userMarker) map.removeLayer(userMarker);
     userMarker = L.marker([latitude, longitude], {
