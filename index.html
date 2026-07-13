@@ -8,7 +8,7 @@
 <script type="module">
   import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
   import {
-    getFirestore, doc, getDoc, setDoc, increment
+    getFirestore, doc, getDoc, setDoc, increment, arrayUnion
   } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 
   const firebaseConfig = {
@@ -25,7 +25,7 @@
   const db = getFirestore(fbApp);
 
   // Expose just what the rest of the (non-module) page script needs
-  window.__fb = { db, doc, getDoc, setDoc, increment };
+  window.__fb = { db, doc, getDoc, setDoc, increment, arrayUnion };
 </script>
 <style>
   :root{
@@ -39,54 +39,66 @@
     padding:14px 16px 10px;background:linear-gradient(180deg,#161616,#1c1c1e);
     border-bottom:2px solid var(--amber);
   }
-  #header h1{margin:0;font-size:19px;letter-spacing:.3px;}
-  #header p{margin:4px 0 0;font-size:12.5px;color:#c9c2b3;}
+  #header h1{margin:0;font-size:23px;letter-spacing:.3px;}
+  #header p{margin:6px 0 0;font-size:15.5px;color:#c9c2b3;line-height:1.4;}
   #mapWrap{position:relative;flex:1 1 auto;min-height:0;}
   #map{position:absolute;inset:0;}
   .leaflet-popup-content-wrapper{background:#fffaf0;border-radius:10px;}
-  .popup-inner{min-width:220px;font-size:13px;}
-  .popup-inner h3{margin:0 0 4px;font-size:15px;color:#1c1c1e;}
-  .popup-inner .addr{color:#666;font-size:11.5px;margin-bottom:8px;}
-  .rating-row{margin:6px 0;}
-  .rating-label{font-weight:600;font-size:12px;color:#333;display:block;margin-bottom:2px;}
-  .star-quip{font-size:11.5px;font-style:italic;color:#777;margin-top:3px;min-height:14px;}
-  .stars{font-size:20px;letter-spacing:2px;cursor:pointer;}
+  .popup-inner{min-width:250px;font-size:16px;}
+  .popup-inner h3{margin:0 0 6px;font-size:19px;color:#1c1c1e;}
+  .popup-inner .addr{color:#666;font-size:14px;margin-bottom:10px;}
+  .rating-row{margin:10px 0;}
+  .rating-label{font-weight:600;font-size:15px;color:#333;display:block;margin-bottom:4px;}
+  .star-quip{font-size:14px;font-style:italic;color:#777;margin-top:4px;min-height:18px;}
+  .stars{font-size:28px;letter-spacing:4px;cursor:pointer;}
   .stars span{cursor:pointer;color:#ddd;transition:color .1s;}
   .stars span.filled{color:var(--amber);}
-  .save-note{font-size:11px;color:#2f6b3c;margin-top:4px;height:14px;}
+  .save-note{font-size:13.5px;color:#2f6b3c;margin-top:6px;height:18px;}
+  .tips-section{margin-top:12px;padding-top:10px;border-top:1px solid #eee;}
+  .tips-list{list-style:none;margin:6px 0 8px;padding:0;max-height:110px;overflow-y:auto;}
+  .tips-list li{font-size:15px;color:#444;padding:4px 0;border-bottom:1px dashed #eee;}
+  .tip-input-row{display:flex;gap:8px;}
+  .tip-input{
+    flex:1;font-size:16px;padding:9px 10px;border:1px solid #ccc;border-radius:6px;
+    min-width:0;
+  }
+  .tip-submit{
+    background:var(--amber);color:#1c1c1e;border:none;border-radius:6px;
+    font-size:15px;font-weight:700;padding:9px 14px;cursor:pointer;flex:none;
+  }
   #legend{
-    position:absolute;top:10px;left:10px;z-index:500;background:rgba(28,28,30,.9);
-    padding:8px 10px;border-radius:8px;font-size:11px;line-height:1.6;border:1px solid #444;
+    position:absolute;top:10px;left:10px;z-index:500;background:rgba(28,28,30,.92);
+    padding:10px 12px;border-radius:8px;font-size:14px;line-height:1.8;border:1px solid #444;
   }
   #searchBox{
     position:absolute;top:10px;right:10px;z-index:500;
     display:flex;align-items:center;background:rgba(28,28,30,.92);border:1px solid #444;
-    border-radius:8px;padding:4px 8px;max-width:52%;
+    border-radius:8px;padding:6px 10px;max-width:56%;
   }
   #searchInput{
-    background:transparent;border:none;color:var(--cream);font-size:13px;padding:5px 4px;
+    background:transparent;border:none;color:var(--cream);font-size:16px;padding:6px 4px;
     outline:none;width:100%;
   }
   #searchInput::placeholder{color:#aaa;}
   #searchClear{
-    background:none;border:none;color:#aaa;font-size:16px;cursor:pointer;padding:0 4px;line-height:1;
+    background:none;border:none;color:#aaa;font-size:20px;cursor:pointer;padding:0 6px;line-height:1;
   }
   #searchCount{
-    position:absolute;top:54px;right:10px;z-index:500;font-size:11px;color:#c9c2b3;
-    background:rgba(28,28,30,.85);padding:3px 8px;border-radius:6px;display:none;
+    position:absolute;top:60px;right:10px;z-index:500;font-size:13.5px;color:#c9c2b3;
+    background:rgba(28,28,30,.85);padding:4px 10px;border-radius:6px;display:none;
   }
-  .dot{display:inline-block;width:9px;height:9px;border-radius:50%;margin-right:5px;}
+  .dot{display:inline-block;width:12px;height:12px;border-radius:50%;margin-right:6px;}
   #locateBtn{
-    position:absolute;bottom:20px;left:16px;z-index:500;
+    position:absolute;top:106px;right:10px;z-index:500;
     background:#2196f3;color:#fff;border:none;border-radius:50px;
-    padding:13px 16px;font-weight:700;font-size:14px;box-shadow:0 3px 10px rgba(0,0,0,.4);
+    padding:15px 18px;font-weight:700;font-size:16px;box-shadow:0 3px 10px rgba(0,0,0,.4);
     cursor:pointer;
   }
   #nearestInfo{
-    position:absolute;bottom:76px;left:16px;z-index:500;
+    position:absolute;top:162px;right:10px;z-index:500;
     background:rgba(28,28,30,.95);color:var(--cream);border:1px solid #2196f3;
-    border-radius:8px;padding:8px 12px;font-size:12.5px;max-width:220px;display:none;
-    cursor:pointer;
+    border-radius:8px;padding:10px 14px;font-size:15px;max-width:240px;display:none;
+    cursor:pointer;line-height:1.4;
   }
   #nearestInfo b{color:var(--amber);}
 </style>
@@ -96,7 +108,7 @@
 <div id="header">
   <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px;">
     <h1 style="margin:0;">🚽 Stewart's Bathroom Report</h1>
-    <a href="https://cash.app/$ItsDaveBr0" target="_blank" rel="noopener" style="flex:none;background:#00C244;color:#fff;text-decoration:none;font-weight:700;font-size:12px;padding:7px 10px;border-radius:8px;white-space:nowrap;">💵 Cash App</a>
+    <a href="https://cash.app/$BathroomReport" target="_blank" rel="noopener" style="flex:none;background:#00C244;color:#fff;text-decoration:none;font-weight:700;font-size:14px;padding:9px 12px;border-radius:8px;white-space:nowrap;">💵 Cash App</a>
   </div>
   <p>Tap a pin to rate the store &amp; bathroom.</p>
   <p style="margin-top:4px;">Missing a location? <a href="mailto:missingbathrooms@yahoo.com?subject=Missing%20Stewart%27s%20Location&body=Store%20address%20or%20cross%20streets%3A%0A%0A" style="color:var(--amber);">Send the store location</a></p>
@@ -120,7 +132,7 @@
 <div id="searchCount"></div>
 
 <div id="map"></div>
-<button id="locateBtn">📍 My Location</button>
+<button id="locateBtn">📍 Where am I?</button>
 <div id="nearestInfo"></div>
 </div>
 
@@ -312,10 +324,28 @@ const seedLocations = [
 {"n":"Frontage Rd, Glenmont","lat":42.620051,"lng":-73.783102,"addr":"21 Frontage Rd, Glenmont, NY 12077","id":"glenmont-frontagerd"},
 {"n":"US-20, Nassau","lat":42.518044,"lng":-73.618028,"addr":"3516 US-20, Nassau, NY 12123","id":"nassau-us20"},
 {"n":"Western Turnpike, Duanesburg","lat":42.761552,"lng":-74.132736,"addr":"5060 Western Turnpike, Duanesburg, NY 12056","id":"duanesburg-westernturnpike"},
-{"n":"Helderberg Trail, East Berne","lat":42.613278,"lng":-74.066814,"addr":"788 Helderberg Trail, East Berne, NY 12059","id":"eastberne-helderbergtrail"}
+{"n":"Helderberg Trail, East Berne","lat":42.613278,"lng":-74.066814,"addr":"788 Helderberg Trail, East Berne, NY 12059","id":"eastberne-helderbergtrail"},
+{"n":"Willett St, Fort Plain","lat":42.932007,"lng":-74.621739,"addr":"18 Willett St, Fort Plain, NY 13339","id":"fortplain-willettst"},
+{"n":"Main St, Fort Plain","lat":42.929899,"lng":-74.624999,"addr":"95 Main St, Fort Plain, NY 13339","id":"fortplain-mainst"},
+{"n":"Main St, Schroon Lake","lat":43.835539,"lng":-73.761708,"addr":"1068 Main St, Schroon Lake, NY 12870","id":"schroonlake-mainst"},
+{"n":"NY-28, North Creek","lat":43.683414,"lng":-73.977737,"addr":"3259 NY-28, North Creek, NY 12853","id":"northcreek-ny28"},
+{"n":"Mohawk St, Herkimer","lat":43.022665,"lng":-74.989033,"addr":"260 Mohawk St, Herkimer, NY 13350","id":"herkimer-mohawkst"},
+{"n":"Indian Fields Rd, Feura Bush","lat":42.579534,"lng":-73.875185,"addr":"1360 Indian Fields Rd, Feura Bush, NY 12067","id":"feurabush-indianfields"},
+{"n":"Lake St, Rouses Point","lat":44.982999,"lng":-73.363222,"addr":"222 Lake Street, Rouses Point, NY 12979","id":"rousespoint-lakest"},
+{"n":"NY-8, Bridgewater","lat":42.879655,"lng":-75.250485,"addr":"336 NY-8, Bridgewater, NY 13313","id":"bridgewater-ny8"},
+{"n":"Poultney St, Whitehall","lat":43.550180,"lng":-73.397754,"addr":"60 Poultney St, Whitehall, NY 12887","id":"whitehall-poultneyst"},
+{"n":"Culver Ave, Utica","lat":43.081985,"lng":-75.205109,"addr":"1210 Culver Ave, Utica, NY 13501","id":"utica-culverave","num":"450"},
+{"n":"Genesee St, Utica","lat":43.077606,"lng":-75.279811,"addr":"2634 Genesee St, Utica, NY 13502","id":"utica-geneseest","num":"217"},
+{"n":"Champlin Ave, Yorkville","lat":43.111445,"lng":-75.265088,"addr":"903 Champlin Ave, Yorkville, NY 13495","id":"yorkville-champlinave","num":"466"},
+{"n":"Court St, Utica","lat":43.100911,"lng":-75.239216,"addr":"425 Court St, Utica, NY 13502","id":"utica-courtst","num":"222"},
+{"n":"Middle Settlement Rd, New Hartford","lat":43.095388,"lng":-75.318479,"addr":"4756 Middle Settlement Rd, New Hartford, NY 13413","id":"newhartford-middlesettlement","num":"453"},
+{"n":"Clinton Rd, Clinton","lat":43.068496,"lng":-75.347668,"addr":"220 Clinton Rd, Clinton, NY 13323","id":"clinton-clintonrd","num":"361"},
+{"n":"E Main St, Frankfort","lat":43.037344,"lng":-75.069144,"addr":"200 E Main St, Frankfort, NY 13340","id":"frankfort-emainst","num":"427"},
+{"n":"NY-233, Westmoreland","lat":43.119610,"lng":-75.405511,"addr":"5319 NY-233, Westmoreland, NY 13490","id":"westmoreland-ny233","num":"455"},
+{"n":"W Main St, Waterville","lat":42.930984,"lng":-75.381381,"addr":"124 W Main St, Waterville, NY 13480","id":"waterville-wmainst","num":"132"}
 ];
 
-const map = L.map('map', { zoomControl: false }).setView([42.75, -73.80], 11);
+const map = L.map('map', { zoomControl: false }).setView([42.75, -73.80], 12);
 L.control.zoom({ position: 'bottomright' }).addTo(map);
 L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
   attribution: '&copy; OpenStreetMap contributors',
@@ -350,11 +380,11 @@ function bathroomColor(agg){
 
 // Marker size scales with zoom level so pins are easy to see and tap whether zoomed out or in
 function sizesForZoom(zoom){
-  if(zoom >= 15) return {unrated:24, rated:30};
-  if(zoom >= 13) return {unrated:20, rated:25};
-  if(zoom >= 11) return {unrated:17, rated:20};
-  if(zoom >= 9)  return {unrated:14, rated:15};
-  return {unrated:11, rated:12};
+  if(zoom >= 15) return {unrated:34, rated:42};
+  if(zoom >= 13) return {unrated:28, rated:35};
+  if(zoom >= 11) return {unrated:23, rated:29};
+  if(zoom >= 9)  return {unrated:18, rated:22};
+  return {unrated:14, rated:16};
 }
 
 function makeIcon(id){
@@ -478,6 +508,28 @@ async function saveMyVote(id, data){
   }
 }
 
+// Short community tips ("need a key", "buzzer required", etc.) — shared, max 50 chars each
+const MAX_TIP_LENGTH = 50;
+async function loadTips(id){
+  try{
+    const {db, doc, getDoc} = await fb();
+    const snap = await getDoc(doc(db, 'tips', id));
+    if(!snap.exists()) return [];
+    return (snap.data().tips || []).slice(-8); // show up to the 8 most recent
+  }catch(e){
+    return [];
+  }
+}
+async function addTip(id, text){
+  try{
+    const {db, doc, setDoc, arrayUnion} = await fb();
+    await setDoc(doc(db, 'tips', id), { tips: arrayUnion(text) }, { merge: true });
+    return true;
+  }catch(e){
+    return false;
+  }
+}
+
 function popupHtml(loc, agg, myVote){
   return `<div class="popup-inner" data-locid="${loc.id}">
     <h3>${loc.n}</h3>
@@ -493,6 +545,14 @@ function popupHtml(loc, agg, myVote){
       <div class="star-quip" id="quip-bathroom-${loc.id}">${quipFor('bathroom', myVote.bathroom)}</div>
     </div>
     <div class="save-note" id="note-${loc.id}">Your stars below — averages are shared with everyone viewing this map.</div>
+    <div class="tips-section">
+      <span class="rating-label">💬 Tips from visitors</span>
+      <ul class="tips-list" id="tips-list-${loc.id}"><li style="color:#999;">Loading…</li></ul>
+      <div class="tip-input-row">
+        <input type="text" class="tip-input" id="tip-input-${loc.id}" maxlength="${MAX_TIP_LENGTH}" placeholder="e.g. need a key, buzzer required" />
+        <button class="tip-submit" id="tip-submit-${loc.id}">Add</button>
+      </div>
+    </div>
   </div>`;
 }
 
@@ -506,7 +566,10 @@ function addMarker(loc){
   myVoteCache[loc.id] = myVoteCache[loc.id] || emptyVote();
   const marker = L.marker([loc.lat, loc.lng], {icon: makeIcon(loc.id)}).addTo(map);
   marker.bindPopup(popupHtml(loc, ratingsCache[loc.id], myVoteCache[loc.id]));
-  marker.on('popupopen', () => attachStarHandlers(loc));
+  marker.on('popupopen', () => {
+    attachStarHandlers(loc);
+    attachTipHandlers(loc);
+  });
   markers[loc.id] = marker;
 }
 
@@ -578,6 +641,57 @@ function attachStarHandlers(loc){
         if(markers[loc.id]) markers[loc.id].setIcon(makeIcon(loc.id));
       });
     });
+  });
+}
+
+function renderTipsList(loc, tips){
+  const listEl = document.getElementById('tips-list-' + loc.id);
+  if(!listEl) return;
+  if(!tips || tips.length === 0){
+    listEl.innerHTML = '<li style="color:#999;">No tips yet — be the first!</li>';
+    return;
+  }
+  listEl.innerHTML = tips.map(t => `<li>💡 ${escapeHtml(t)}</li>`).join('');
+}
+
+function escapeHtml(str){
+  const div = document.createElement('div');
+  div.textContent = str;
+  return div.innerHTML;
+}
+
+async function attachTipHandlers(loc){
+  const listEl = document.getElementById('tips-list-' + loc.id);
+  const inputEl = document.getElementById('tip-input-' + loc.id);
+  const submitEl = document.getElementById('tip-submit-' + loc.id);
+  if(!listEl || !inputEl || !submitEl) return;
+
+  // Load existing tips fresh each time the popup opens
+  const tips = await loadTips(loc.id);
+  renderTipsList(loc, tips);
+
+  // Avoid stacking duplicate listeners if the popup is reopened
+  if(submitEl.dataset.bound === '1') return;
+  submitEl.dataset.bound = '1';
+
+  const submit = async () => {
+    const text = inputEl.value.trim().slice(0, MAX_TIP_LENGTH);
+    if(!text) return;
+    submitEl.disabled = true;
+    submitEl.textContent = '...';
+    const ok = await addTip(loc.id, text);
+    if(ok){
+      const current = await loadTips(loc.id);
+      renderTipsList(loc, current);
+      inputEl.value = '';
+    }
+    submitEl.disabled = false;
+    submitEl.textContent = 'Add';
+  };
+
+  submitEl.addEventListener('click', submit);
+  inputEl.addEventListener('keydown', (e) => {
+    if(e.key === 'Enter') submit();
   });
 }
 
@@ -665,7 +779,7 @@ locateBtn.addEventListener('click', () => {
   locateBtn.textContent = '📍 Locating...';
   navigator.geolocation.getCurrentPosition((pos) => {
     const { latitude, longitude } = pos.coords;
-    locateBtn.textContent = '📍 My Location';
+    locateBtn.textContent = '📍 Where am I?';
 
     if(userMarker) map.removeLayer(userMarker);
     userMarker = L.marker([latitude, longitude], {
@@ -694,7 +808,7 @@ locateBtn.addEventListener('click', () => {
       };
     }
   }, (err) => {
-    locateBtn.textContent = '📍 My Location';
+    locateBtn.textContent = '📍 Where am I?';
     nearestInfo.style.display = 'block';
     nearestInfo.textContent = 'Could not get your location — check location permissions for this site.';
   }, { enableHighAccuracy: true, timeout: 10000 });
