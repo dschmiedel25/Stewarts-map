@@ -6,7 +6,7 @@
 <script type="module">
   import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
   import {
-    getFirestore, collection, getDocs
+    getFirestore, collection, getDocs, doc, updateDoc, deleteDoc, arrayRemove
   } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 
   const firebaseConfig = {
@@ -20,7 +20,7 @@
   };
   const fbApp = initializeApp(firebaseConfig);
   const db = getFirestore(fbApp);
-  window.__fb = { db, collection, getDocs };
+  window.__fb = { db, collection, getDocs, doc, updateDoc, deleteDoc, arrayRemove };
 </script>
 <style>
   body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;background:#1c1c1e;color:#fdf6e9;padding:16px;}
@@ -53,7 +53,7 @@
 <h2 style="font-size:16px;margin:20px 0 8px;">🚩 Reported Issues</h2>
 <table style="margin-bottom:24px;">
   <thead>
-    <tr><th>Location</th><th>Issue</th><th>When</th></tr>
+    <tr><th>Location</th><th>Issue</th><th>When</th><th>Action</th></tr>
   </thead>
   <tbody id="reportsBody">
     <tr><td colspan="3" class="loading">Loading…</td></tr>
@@ -65,7 +65,7 @@
 
 <table>
   <thead>
-    <tr><th>Location</th><th>Store</th><th>Bathroom</th><th>Tips</th></tr>
+    <tr><th>Location</th><th id="th-store" style="cursor:pointer;">Store ⇅</th><th id="th-bathroom" style="cursor:pointer;">Bathroom ⇅</th><th>Tips</th></tr>
   </thead>
   <tbody id="tableBody">
     <tr><td colspan="4" class="loading">Loading data from Firestore…</td></tr>
@@ -295,6 +295,28 @@ function escapeHtml(str){
 
 function avgStr(sum, count){ return count > 0 ? (sum/count).toFixed(1) : '—'; }
 
+async function deleteTip(locId, tipText){
+  try{
+    const {db, doc, updateDoc, arrayRemove} = await fb();
+    await updateDoc(doc(db, 'tips', locId), { tips: arrayRemove(tipText) });
+    return true;
+  }catch(e){
+    console.error('delete tip failed', e);
+    return false;
+  }
+}
+
+async function dismissReport(reportId){
+  try{
+    const {db, doc, deleteDoc} = await fb();
+    await deleteDoc(doc(db, 'reports', reportId));
+    return true;
+  }catch(e){
+    console.error('dismiss report failed', e);
+    return false;
+  }
+}
+
 let allRows = [];
 
 async function loadAll(){
@@ -325,12 +347,12 @@ async function loadAll(){
 
   const reportsSnap = await getDocs(collection(db, 'reports'));
   const reports = [];
-  reportsSnap.forEach(d => reports.push(d.data()));
+  reportsSnap.forEach(d => reports.push({ id: d.id, ...d.data() }));
   reports.sort((a, b) => (b.ts || 0) - (a.ts || 0));
   document.getElementById('statReports').textContent = reports.length;
   const reportsBody = document.getElementById('reportsBody');
   if(reports.length === 0){
-    reportsBody.innerHTML = '<tr><td colspan="3" class="loading">No reports yet.</td></tr>';
+    reportsBody.innerHTML = '<tr><td colspan="4" class="loading">No reports yet.</td></tr>';
   } else {
     reportsBody.innerHTML = reports.map(r => {
       const when = r.ts ? new Date(r.ts).toLocaleString() : '—';
@@ -338,11 +360,12 @@ async function loadAll(){
         <td><b>${escapeHtml(r.locName || '')}</b><br><span style="color:#999;">${escapeHtml(r.addr || '')}</span></td>
         <td>${escapeHtml(r.reason || '')}</td>
         <td style="color:#999;">${when}</td>
+        <td><button class="dismiss-report-btn" data-reportid="${r.id}" style="background:#444;color:#fff;border:none;border-radius:6px;padding:5px 10px;font-size:12px;cursor:pointer;">✕ Dismiss</button></td>
       </tr>`;
     }).join('');
   }
 
-  renderTable(allRows);
+  refreshTable();
 }
 
 function renderTable(rows){
@@ -354,7 +377,9 @@ function renderTable(rows){
   body.innerHTML = rows.map(r => {
     const loc = r.loc, agg = r.agg, tips = r.tips;
     const tipsHtml = tips.length
-      ? '<ul class="tiplist">' + tips.map(t => `<li>${escapeHtml(t)}</li>`).join('') + '</ul>'
+      ? '<ul class="tiplist">' + tips.map(t =>
+          `<li>💡 ${escapeHtml(t)} <button class="delete-tip-btn" data-locid="${loc.id}" data-tip="${encodeURIComponent(t)}" style="background:none;border:none;color:#e53935;cursor:pointer;font-size:12px;padding:0 0 0 6px;">✕</button></li>`
+        ).join('') + '</ul>'
       : '<span class="loading">none</span>';
     return `<tr>
       <td><b>${escapeHtml(loc.n)}</b><br><span style="color:#999;">${escapeHtml(loc.addr)}${loc.num ? ' · #' + loc.num : ''}</span></td>
@@ -365,15 +390,88 @@ function renderTable(rows){
   }).join('');
 }
 
-document.getElementById('filterBox').addEventListener('input', (e) => {
-  const q = e.target.value.trim().toLowerCase();
-  if(!q){ renderTable(allRows); return; }
-  const filtered = allRows.filter(r =>
-    r.loc.n.toLowerCase().includes(q) ||
-    r.loc.addr.toLowerCase().includes(q) ||
-    (r.loc.num || '').toLowerCase().includes(q)
-  );
-  renderTable(filtered);
+let sortState = { column: null, direction: 'desc' }; // column: 'store' | 'bathroom' | null
+
+function sortRows(rows){
+  if(!sortState.column) return rows;
+  const sorted = [...rows];
+  const bathAvg = r => r.agg.bathroomCount > 0 ? r.agg.bathroomSum / r.agg.bathroomCount : -1;
+  const storeAvg = r => r.agg.storeCount > 0 ? r.agg.storeSum / r.agg.storeCount : -1;
+  const getVal = sortState.column === 'store' ? storeAvg : bathAvg;
+  sorted.sort((a, b) => sortState.direction === 'desc' ? getVal(b) - getVal(a) : getVal(a) - getVal(b));
+  return sorted;
+}
+
+function updateHeaderLabels(){
+  const arrow = sortState.direction === 'desc' ? '▼' : '▲';
+  document.getElementById('th-store').textContent = 'Store ' + (sortState.column === 'store' ? arrow : '⇅');
+  document.getElementById('th-bathroom').textContent = 'Bathroom ' + (sortState.column === 'bathroom' ? arrow : '⇅');
+}
+
+function refreshTable(){
+  const q = document.getElementById('filterBox').value.trim().toLowerCase();
+  let rows = allRows;
+  if(q){
+    rows = rows.filter(r =>
+      r.loc.n.toLowerCase().includes(q) ||
+      r.loc.addr.toLowerCase().includes(q) ||
+      (r.loc.num || '').toLowerCase().includes(q)
+    );
+  }
+  rows = sortRows(rows);
+  updateHeaderLabels();
+  renderTable(rows);
+}
+
+function handleHeaderClick(column){
+  if(sortState.column === column){
+    sortState.direction = sortState.direction === 'desc' ? 'asc' : 'desc';
+  } else {
+    sortState.column = column;
+    sortState.direction = 'desc'; // highest first by default on first click
+  }
+  refreshTable();
+}
+
+document.getElementById('th-store').addEventListener('click', () => handleHeaderClick('store'));
+document.getElementById('th-bathroom').addEventListener('click', () => handleHeaderClick('bathroom'));
+document.getElementById('filterBox').addEventListener('input', refreshTable);
+
+// Event delegation — handles clicks on delete/dismiss buttons even after table re-renders
+document.getElementById('tableBody').addEventListener('click', async (e) => {
+  const btn = e.target.closest('.delete-tip-btn');
+  if(!btn) return;
+  const locId = btn.dataset.locid;
+  const tipText = decodeURIComponent(btn.dataset.tip);
+  if(!confirm(`Delete this tip?\n\n"${tipText}"`)) return;
+  btn.disabled = true;
+  const ok = await deleteTip(locId, tipText);
+  if(ok){
+    const row = allRows.find(r => r.loc.id === locId);
+    if(row) row.tips = row.tips.filter(t => t !== tipText);
+    refreshTable();
+  } else {
+    alert('Could not delete — try again.');
+    btn.disabled = false;
+  }
+});
+
+document.getElementById('reportsBody').addEventListener('click', async (e) => {
+  const btn = e.target.closest('.dismiss-report-btn');
+  if(!btn) return;
+  const reportId = btn.dataset.reportid;
+  btn.disabled = true;
+  btn.textContent = '...';
+  const ok = await dismissReport(reportId);
+  if(ok){
+    btn.closest('tr').remove();
+    const statEl = document.getElementById('statReports');
+    statEl.textContent = Math.max(0, parseInt(statEl.textContent || '0', 10) - 1);
+  } else {
+    alert('Could not dismiss — try again.');
+    btn.disabled = false;
+    btn.textContent = '✕ Dismiss';
+  }
 });
 
 loadAll();
