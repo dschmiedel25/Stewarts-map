@@ -6,7 +6,8 @@
 <script type="module">
   import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
   import {
-    getFirestore, collection, getDocs, doc, updateDoc, deleteDoc, arrayRemove
+    getFirestore, collection, getDocs, doc, updateDoc, deleteDoc, arrayRemove,
+    arrayUnion, increment, setDoc
   } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 
   const firebaseConfig = {
@@ -20,7 +21,7 @@
   };
   const fbApp = initializeApp(firebaseConfig);
   const db = getFirestore(fbApp);
-  window.__fb = { db, collection, getDocs, doc, updateDoc, deleteDoc, arrayRemove };
+  window.__fb = { db, collection, getDocs, doc, updateDoc, deleteDoc, arrayRemove, arrayUnion, increment, setDoc };
 </script>
 <style>
   body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;background:#1c1c1e;color:#fdf6e9;padding:16px;}
@@ -68,6 +69,17 @@
   </thead>
   <tbody id="reportsBody">
     <tr><td colspan="3" class="loading">Loading…</td></tr>
+  </tbody>
+</table>
+
+<h2 style="font-size:16px;margin:20px 0 8px;">👤 Raters (spam check)</h2>
+<p style="color:#999;font-size:12px;margin:0 0 8px;">Each row is one anonymous device/browser. Sorted by most active first — a device with an unusually high count relative to everyone else is worth a closer look.</p>
+<table style="margin-bottom:24px;">
+  <thead>
+    <tr><th>Device ID</th><th># Rated</th><th>Last Activity</th><th>Details</th></tr>
+  </thead>
+  <tbody id="ratersBody">
+    <tr><td colspan="4" class="loading">Loading…</td></tr>
   </tbody>
 </table>
 
@@ -409,6 +421,48 @@ async function dismissMissing(missingId){
   }
 }
 
+// Undo everything a device rated (reversing its impact on every average) and block it from rating again
+async function removeAndBlockDevice(clientId, entries){
+  try{
+    const {db, doc, updateDoc, deleteDoc, increment, setDoc} = await fb();
+    for(const entry of entries){
+      const aggRef = doc(db, 'aggregates', entry.locId);
+      const updates = {};
+      if(entry.store > 0){
+        updates.storeSum = increment(-entry.store);
+        updates.storeCount = increment(-1);
+      }
+      if(entry.bathroom > 0){
+        updates.bathroomSum = increment(-entry.bathroom);
+        updates.bathroomCount = increment(-1);
+      }
+      if(Object.keys(updates).length > 0){
+        await updateDoc(aggRef, updates);
+      }
+      await deleteDoc(doc(db, 'votes', entry.locId + '_' + clientId));
+    }
+    await setDoc(doc(db, 'blockedDevices', clientId), { blockedAt: Date.now() });
+    return true;
+  }catch(e){
+    console.error('removeAndBlockDevice failed', e);
+    return false;
+  }
+}
+
+// Edit an existing tip's text (remove old string, add new one — Firestore array fields don't support in-place edits)
+async function editTip(locId, oldText, newText){
+  try{
+    const {db, doc, updateDoc, arrayRemove, arrayUnion} = await fb();
+    const ref = doc(db, 'tips', locId);
+    await updateDoc(ref, { tips: arrayRemove(oldText) });
+    await updateDoc(ref, { tips: arrayUnion(newText) });
+    return true;
+  }catch(e){
+    console.error('editTip failed', e);
+    return false;
+  }
+}
+
 let allRows = [];
 
 async function loadAll(){
@@ -485,6 +539,72 @@ async function loadAll(){
     document.getElementById('missingBody').innerHTML = '<tr><td colspan="3" class="loading">Could not load — check Firestore rules for the missingReports collection.</td></tr>';
   }
 
+  try{
+    const votesSnap = await getDocs(collection(db, 'votes'));
+    const locNameById = {};
+    seedLocations.forEach(l => { locNameById[l.id] = l.n; });
+
+    const byClient = {}; // clientId -> { entries: [...], lastActivity }
+    votesSnap.forEach(d => {
+      const v = d.data();
+      const clientId = v.clientId || 'unknown';
+      const locId = v.locId || d.id.split('_')[0];
+      if(!byClient[clientId]) byClient[clientId] = { entries: [], lastActivity: 0 };
+      byClient[clientId].entries.push({
+        locId,
+        locName: locNameById[locId] || locId,
+        store: v.store || 0,
+        bathroom: v.bathroom || 0,
+        lastUpdated: v.lastUpdated || 0
+      });
+      if((v.lastUpdated || 0) > byClient[clientId].lastActivity){
+        byClient[clientId].lastActivity = v.lastUpdated || 0;
+      }
+    });
+
+    const raters = Object.keys(byClient).map(clientId => ({
+      clientId,
+      count: byClient[clientId].entries.length,
+      lastActivity: byClient[clientId].lastActivity,
+      entries: byClient[clientId].entries.sort((a,b) => (b.lastUpdated||0) - (a.lastUpdated||0))
+    }));
+    raters.sort((a, b) => b.count - a.count);
+
+    // Flag anything meaningfully above the typical rater's activity as worth a look
+    const avgCount = raters.length ? raters.reduce((s,r) => s + r.count, 0) / raters.length : 0;
+    const spamThreshold = Math.max(10, avgCount * 3);
+
+    const ratersBody = document.getElementById('ratersBody');
+    if(raters.length === 0){
+      ratersBody.innerHTML = '<tr><td colspan="4" class="loading">No ratings submitted yet.</td></tr>';
+    } else {
+      window.__ratersData = {}; // clientId -> entries, so the block button can look up full data
+      ratersBody.innerHTML = raters.map(r => {
+        const shortId = r.clientId.length > 14 ? r.clientId.slice(0, 14) + '…' : r.clientId;
+        const when = r.lastActivity ? new Date(r.lastActivity).toLocaleString() : '—';
+        const flag = r.count >= spamThreshold ? ' ⚠️' : '';
+        const detailsList = r.entries.slice(0, 25).map(e =>
+          `${escapeHtml(e.locName)} (Store ${e.store||'–'}★, Bath ${e.bathroom||'–'}★)`
+        ).join('<br>');
+        const detailsId = 'raterdetails-' + shortId.replace(/[^a-zA-Z0-9]/g,'');
+        window.__ratersData[r.clientId] = r.entries;
+        return `<tr>
+          <td style="font-family:monospace;font-size:11px;">${escapeHtml(shortId)}${flag}</td>
+          <td>${r.count}</td>
+          <td style="color:#999;">${when}</td>
+          <td>
+              <button class="toggle-details-btn" data-target="${detailsId}" style="background:#444;color:#fff;border:none;border-radius:6px;padding:5px 10px;font-size:12px;cursor:pointer;">View</button>
+              <button class="block-rater-btn" data-clientid="${r.clientId}" style="background:#b71c1c;color:#fff;border:none;border-radius:6px;padding:5px 10px;font-size:12px;cursor:pointer;margin-left:4px;">🚫 Remove &amp; Block</button>
+              <div id="${detailsId}" style="display:none;margin-top:6px;font-size:12px;color:#ccc;">${detailsList}</div>
+          </td>
+        </tr>`;
+      }).join('');
+    }
+  }catch(e){
+    console.error('Failed to load votes for rater view', e);
+    document.getElementById('ratersBody').innerHTML = '<tr><td colspan="4" class="loading">Could not load rater data.</td></tr>';
+  }
+
   refreshTable();
 }
 
@@ -497,9 +617,14 @@ function renderTable(rows){
   body.innerHTML = rows.map(r => {
     const loc = r.loc, agg = r.agg, tips = r.tips;
     const tipsHtml = tips.length
-      ? '<ul class="tiplist">' + tips.map(t =>
-          `<li>💡 ${escapeHtml(t)} <button class="delete-tip-btn" data-locid="${loc.id}" data-tip="${encodeURIComponent(t)}" style="background:none;border:none;color:#e53935;cursor:pointer;font-size:12px;padding:0 0 0 6px;">✕</button></li>`
-        ).join('') + '</ul>'
+      ? '<ul class="tiplist">' + tips.map((t, i) => {
+          const tipId = 'tip-' + loc.id + '-' + i;
+          return `<li id="${tipId}">
+            <span class="tip-text">💡 ${escapeHtml(t)}</span>
+            <button class="edit-tip-btn" data-locid="${loc.id}" data-tip="${encodeURIComponent(t)}" data-tipid="${tipId}" style="background:none;border:none;color:#90caf9;cursor:pointer;font-size:12px;padding:0 0 0 6px;">✏️</button>
+            <button class="delete-tip-btn" data-locid="${loc.id}" data-tip="${encodeURIComponent(t)}" style="background:none;border:none;color:#e53935;cursor:pointer;font-size:12px;padding:0 0 0 4px;">✕</button>
+          </li>`;
+        }).join('') + '</ul>'
       : '<span class="loading">none</span>';
     return `<tr>
       <td><b>${escapeHtml(loc.n)}</b><br><span style="color:#999;">${escapeHtml(loc.addr)}${loc.num ? ' · #' + loc.num : ''}</span></td>
@@ -563,20 +688,63 @@ document.getElementById('filterBox').addEventListener('input', refreshTable);
 
 // Event delegation — handles clicks on delete/dismiss buttons even after table re-renders
 document.getElementById('tableBody').addEventListener('click', async (e) => {
-  const btn = e.target.closest('.delete-tip-btn');
-  if(!btn) return;
-  const locId = btn.dataset.locid;
-  const tipText = decodeURIComponent(btn.dataset.tip);
-  if(!confirm(`Delete this tip?\n\n"${tipText}"`)) return;
-  btn.disabled = true;
-  const ok = await deleteTip(locId, tipText);
-  if(ok){
-    const row = allRows.find(r => r.loc.id === locId);
-    if(row) row.tips = row.tips.filter(t => t !== tipText);
-    refreshTable();
-  } else {
-    alert('Could not delete — try again.');
-    btn.disabled = false;
+  const deleteBtn = e.target.closest('.delete-tip-btn');
+  if(deleteBtn){
+    const locId = deleteBtn.dataset.locid;
+    const tipText = decodeURIComponent(deleteBtn.dataset.tip);
+    if(!confirm(`Delete this tip?\n\n"${tipText}"`)) return;
+    deleteBtn.disabled = true;
+    const ok = await deleteTip(locId, tipText);
+    if(ok){
+      const row = allRows.find(r => r.loc.id === locId);
+      if(row) row.tips = row.tips.filter(t => t !== tipText);
+      refreshTable();
+    } else {
+      alert('Could not delete — try again.');
+      deleteBtn.disabled = false;
+    }
+    return;
+  }
+
+  const editBtn = e.target.closest('.edit-tip-btn');
+  if(editBtn){
+    const locId = editBtn.dataset.locid;
+    const oldText = decodeURIComponent(editBtn.dataset.tip);
+    const li = document.getElementById(editBtn.dataset.tipid);
+    if(!li) return;
+    li.innerHTML = `
+      <input type="text" class="edit-tip-input" value="${oldText.replace(/"/g,'&quot;')}" maxlength="50" style="font-size:12px;padding:3px 6px;border-radius:4px;border:1px solid #666;width:60%;" />
+      <button class="save-tip-btn" data-locid="${locId}" data-oldtip="${encodeURIComponent(oldText)}" style="background:#43a047;color:#fff;border:none;border-radius:4px;padding:3px 8px;font-size:11px;cursor:pointer;margin-left:4px;">Save</button>
+      <button class="cancel-tip-btn" style="background:#666;color:#fff;border:none;border-radius:4px;padding:3px 8px;font-size:11px;cursor:pointer;margin-left:2px;">Cancel</button>
+    `;
+    return;
+  }
+
+  const cancelBtn = e.target.closest('.cancel-tip-btn');
+  if(cancelBtn){
+    refreshTable(); // just re-render from existing data, discarding the edit
+    return;
+  }
+
+  const saveBtn = e.target.closest('.save-tip-btn');
+  if(saveBtn){
+    const locId = saveBtn.dataset.locid;
+    const oldText = decodeURIComponent(saveBtn.dataset.oldtip);
+    const li = saveBtn.closest('li');
+    const input = li.querySelector('.edit-tip-input');
+    const newText = input.value.trim().slice(0, 50);
+    if(!newText || newText === oldText){ refreshTable(); return; }
+    saveBtn.disabled = true;
+    saveBtn.textContent = '...';
+    const ok = await editTip(locId, oldText, newText);
+    if(ok){
+      const row = allRows.find(r => r.loc.id === locId);
+      if(row) row.tips = row.tips.map(t => t === oldText ? newText : t);
+      refreshTable();
+    } else {
+      alert('Could not save — try again.');
+      refreshTable();
+    }
   }
 });
 
@@ -613,6 +781,39 @@ document.getElementById('missingBody').addEventListener('click', async (e) => {
     alert('Could not dismiss — try again.');
     btn.disabled = false;
     btn.textContent = '✕ Dismiss';
+  }
+});
+
+document.getElementById('ratersBody').addEventListener('click', async (e) => {
+  const toggleBtn = e.target.closest('.toggle-details-btn');
+  if(toggleBtn){
+    const target = document.getElementById(toggleBtn.dataset.target);
+    if(!target) return;
+    const isOpen = target.style.display !== 'none';
+    target.style.display = isOpen ? 'none' : 'block';
+    toggleBtn.textContent = isOpen ? 'View' : 'Hide';
+    return;
+  }
+
+  const blockBtn = e.target.closest('.block-rater-btn');
+  if(blockBtn){
+    const clientId = blockBtn.dataset.clientid;
+    const entries = (window.__ratersData && window.__ratersData[clientId]) || [];
+    const confirmed = confirm(
+      `Remove all ${entries.length} rating(s) from this device and block it from rating again?\n\nThis cannot be undone.`
+    );
+    if(!confirmed) return;
+    blockBtn.disabled = true;
+    blockBtn.textContent = 'Working...';
+    const ok = await removeAndBlockDevice(clientId, entries);
+    if(ok){
+      blockBtn.closest('tr').innerHTML = `<td colspan="4" style="color:#4caf50;">✅ Removed and blocked.</td>`;
+      loadAll(); // refresh everything since averages just changed
+    } else {
+      alert('Something went wrong — try again.');
+      blockBtn.disabled = false;
+      blockBtn.textContent = '🚫 Remove & Block';
+    }
   }
 });
 
