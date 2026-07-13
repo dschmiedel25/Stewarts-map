@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<title>Stewart's Shops Tracker</title>
+<title>Stewart's Bathroom Report</title>
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css" />
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
 <script type="module">
@@ -46,36 +46,11 @@
   .popup-inner .addr{color:#666;font-size:11.5px;margin-bottom:8px;}
   .rating-row{margin:6px 0;}
   .rating-label{font-weight:600;font-size:12px;color:#333;display:block;margin-bottom:2px;}
+  .star-quip{font-size:11.5px;font-style:italic;color:#777;margin-top:3px;min-height:14px;}
   .stars{font-size:20px;letter-spacing:2px;cursor:pointer;}
   .stars span{cursor:pointer;color:#ddd;transition:color .1s;}
   .stars span.filled{color:var(--amber);}
   .save-note{font-size:11px;color:#2f6b3c;margin-top:4px;height:14px;}
-  #addBtn{
-    position:absolute;bottom:20px;right:16px;z-index:500;
-    background:var(--amber);color:#1c1c1e;border:none;border-radius:50px;
-    padding:13px 18px;font-weight:700;font-size:14px;box-shadow:0 3px 10px rgba(0,0,0,.4);
-    cursor:pointer;
-  }
-  #addModal{
-    position:absolute;inset:0;z-index:1000;background:rgba(0,0,0,.55);
-    display:none;align-items:center;justify-content:center;
-  }
-  #addModal.open{display:flex;}
-  #addModalBox{
-    background:#fffaf0;color:#1c1c1e;border-radius:12px;padding:18px;width:80%;max-width:320px;
-    box-shadow:0 8px 30px rgba(0,0,0,.5);
-  }
-  #addModalBox h3{margin:0 0 10px;font-size:16px;}
-  #addModalBox input{
-    width:100%;padding:9px 10px;border:1px solid #ccc;border-radius:6px;font-size:14px;box-sizing:border-box;
-    margin-bottom:12px;
-  }
-  #addModalBox .btnrow{display:flex;gap:8px;justify-content:flex-end;}
-  #addModalBox button{
-    padding:8px 14px;border-radius:6px;border:none;font-weight:600;font-size:13px;cursor:pointer;
-  }
-  #addModalCancel{background:#e0e0e0;color:#333;}
-  #addModalSave{background:var(--amber);color:#1c1c1e;}
   #legend{
     position:absolute;top:84px;left:10px;z-index:500;background:rgba(28,28,30,.9);
     padding:8px 10px;border-radius:8px;font-size:11px;line-height:1.6;border:1px solid #444;
@@ -116,7 +91,7 @@
 <body>
 
 <div id="header">
-  <h1>🏪 Stewart's Shops Tracker</h1>
+  <h1>🚽 Stewart's Bathroom Report</h1>
   <p>Tap a pin to rate the store &amp; bathroom. Averages are shared with everyone who opens this map.</p>
 </div>
 
@@ -132,20 +107,8 @@
 <div id="searchCount"></div>
 
 <div id="map"></div>
-<button id="addBtn">➕ Add location</button>
 <button id="locateBtn">📍 My Location</button>
 <div id="nearestInfo"></div>
-
-<div id="addModal">
-  <div id="addModalBox">
-    <h3>Name this Stewart's location</h3>
-    <input type="text" id="addModalInput" placeholder="e.g. Route 9, Anytown" />
-    <div class="btnrow">
-      <button id="addModalCancel">Cancel</button>
-      <button id="addModalSave">Add pin</button>
-    </div>
-  </div>
-</div>
 
 <script>
 const seedLocations = [
@@ -323,7 +286,17 @@ const seedLocations = [
 {"n":"Helderberg Ave, Schenectady","lat":42.781238,"lng":-73.957950,"addr":"1841 Helderberg Ave, Schenectady, NY 12303","id":"schdy-helderbergave","num":"189"},
 {"n":"Broadway, Rotterdam","lat":42.796916,"lng":-73.967071,"addr":"2140 Broadway, Schenectady, NY 12306","id":"rotterdam-broadway","num":"269"},
 {"n":"Highbridge Rd, Rotterdam","lat":42.771324,"lng":-73.923613,"addr":"1100 Highbridge Rd, Schenectady, NY 12303","id":"rotterdam-highbridge","num":"320"},
-{"n":"Chrisler Ave, Schenectady","lat":42.795593,"lng":-73.943395,"addr":"1209 Chrisler Ave, Schenectady, NY 12303","id":"schdy-chrislerave"}
+{"n":"Chrisler Ave, Schenectady","lat":42.795593,"lng":-73.943395,"addr":"1209 Chrisler Ave, Schenectady, NY 12303","id":"schdy-chrislerave"},
+{"n":"Watervliet Shaker Rd, Colonie","lat":42.742891,"lng":-73.837539,"addr":"1024 Watervliet Shaker Rd, Albany, NY 12205","id":"colonie-watervlietshaker"},
+{"n":"Albany Shaker Rd, Loudonville","lat":42.697191,"lng":-73.768805,"addr":"406 Albany Shaker Rd, Loudonville, NY 12211","id":"loudonville-albanyshaker"},
+{"n":"Delaware Turnpike, Voorheesville","lat":42.592715,"lng":-73.986961,"addr":"2475 Delaware Turnpike, Voorheesville, NY 12186","id":"voorheesville-delawaretpk"},
+{"n":"Altamont Blvd, Altamont","lat":42.700537,"lng":-74.033910,"addr":"1001 Altamont Blvd, Altamont, NY 12009","id":"altamont-altamontblvd"},
+{"n":"Sand Creek Rd, Albany","lat":42.697811,"lng":-73.791479,"addr":"219 Sand Creek Rd, Albany, NY 12205","id":"albany-sandcreek"},
+{"n":"Delaware Ave, Albany","lat":42.639570,"lng":-73.785296,"addr":"470 Delaware Ave, Albany, NY 12202","id":"albany-delawareave"},
+{"n":"Partition St, Rensselaer","lat":42.645700,"lng":-73.739145,"addr":"12 Partition St, Rensselaer, NY 12144","id":"rensselaer-partitionst"},
+{"n":"US-9W, Selkirk","lat":42.541085,"lng":-73.805501,"addr":"1344 US-9W, Selkirk, NY 12158","id":"selkirk-us9w"},
+{"n":"Frontage Rd, Glenmont","lat":42.620051,"lng":-73.783102,"addr":"21 Frontage Rd, Glenmont, NY 12077","id":"glenmont-frontagerd"},
+{"n":"US-20, Nassau","lat":42.518044,"lng":-73.618028,"addr":"3516 US-20, Nassau, NY 12123","id":"nassau-us20"}
 ];
 
 const map = L.map('map').setView([42.75, -73.80], 10);
@@ -360,6 +333,26 @@ function makeIcon(id){
 function emptyAgg(){ return {storeSum:0, storeCount:0, bathroomSum:0, bathroomCount:0}; }
 function emptyVote(){ return {store:0, bathroom:0}; }
 function avgStr(sum, count){ return count > 0 ? (sum/count).toFixed(1) : '—'; }
+
+// Funny captions for each star level
+const storeQuips = {
+  1: "Run, don't walk.",
+  2: "Only if it's the last gas station for 50 miles.",
+  3: "Does the job. No notes.",
+  4: "A genuinely good Stewart's.",
+  5: "The one, the myth, the legend."
+};
+const bathroomQuips = {
+  1: "Better off pooping in the woods.",
+  2: "BYO toilet paper — and hand sanitizer.",
+  3: "Adequate. Don't linger.",
+  4: "Cleaner than my own bathroom.",
+  5: "Michelin-star restroom. Bring a book."
+};
+function quipFor(type, val){
+  if(!val) return 'Tap a star to rate';
+  return (type === 'store' ? storeQuips : bathroomQuips)[val] || '';
+}
 
 // Wait for the Firebase module script (loaded separately) to finish initializing
 async function fb(){
@@ -435,10 +428,12 @@ function popupHtml(loc, agg, myVote){
     <div class="rating-row">
       <span class="rating-label">Store — avg ${avgStr(agg.storeSum, agg.storeCount)}★ (${agg.storeCount} ${agg.storeCount===1?'rating':'ratings'})</span>
       ${starsHtml(loc.id,'store',myVote.store)}
+      <div class="star-quip" id="quip-store-${loc.id}">${quipFor('store', myVote.store)}</div>
     </div>
     <div class="rating-row">
       <span class="rating-label">🚻 Bathroom — avg ${avgStr(agg.bathroomSum, agg.bathroomCount)}★ (${agg.bathroomCount} ${agg.bathroomCount===1?'rating':'ratings'})</span>
       ${starsHtml(loc.id,'bathroom',myVote.bathroom)}
+      <div class="star-quip" id="quip-bathroom-${loc.id}">${quipFor('bathroom', myVote.bathroom)}</div>
     </div>
     <div class="save-note" id="note-${loc.id}">Your stars below — averages are shared with everyone viewing this map.</div>
   </div>`;
@@ -508,6 +503,10 @@ function attachStarHandlers(loc){
           s.classList.toggle('filled', (i+1) <= val);
         });
 
+        // update the funny caption immediately
+        const quipEl = document.getElementById('quip-' + type + '-' + loc.id);
+        if(quipEl) quipEl.textContent = quipFor(type, val);
+
         const okAgg = await bumpAggregate(loc.id, sumKey, sumDelta, countKey, countDelta);
         const okVote = await saveMyVote(loc.id, myVote);
         if(note) note.textContent = (okAgg && okVote) ? 'Saved ✓ — visible to everyone' : 'Save failed';
@@ -528,49 +527,6 @@ function attachStarHandlers(loc){
 
 // Load all seed locations — this is now instant since no storage calls happen until a pin is tapped
 seedLocations.forEach(loc => addMarker(loc));
-
-// Add custom location
-let addingMode = false;
-let pendingLatLng = null;
-
-document.getElementById('addBtn').addEventListener('click', () => {
-  addingMode = true;
-  document.getElementById('addBtn').textContent = '📍 Tap map to place pin...';
-});
-
-map.on('click', (e) => {
-  if(!addingMode) return;
-  addingMode = false;
-  document.getElementById('addBtn').textContent = '➕ Add location';
-  pendingLatLng = e.latlng;
-  document.getElementById('addModalInput').value = '';
-  document.getElementById('addModal').classList.add('open');
-  setTimeout(() => document.getElementById('addModalInput').focus(), 50);
-});
-
-document.getElementById('addModalCancel').addEventListener('click', () => {
-  document.getElementById('addModal').classList.remove('open');
-  pendingLatLng = null;
-});
-
-document.getElementById('addModalSave').addEventListener('click', async () => {
-  const name = document.getElementById('addModalInput').value.trim();
-  document.getElementById('addModal').classList.remove('open');
-  if(!name || !pendingLatLng) { pendingLatLng = null; return; }
-  const id = 'custom-' + Date.now();
-  const loc = {n:name, lat:pendingLatLng.lat, lng:pendingLatLng.lng, addr:'Custom pin', id:id};
-  seedLocations.push(loc);
-  await addMarker(loc);
-  markers[id].openPopup();
-  pendingLatLng = null;
-});
-
-// Allow pressing Enter in the input to save
-document.getElementById('addModalInput').addEventListener('keydown', (e) => {
-  if(e.key === 'Enter'){
-    document.getElementById('addModalSave').click();
-  }
-});
 
 // Search / filter by store number, name, address, or town
 function locMatches(loc, q){
