@@ -652,10 +652,19 @@ try{
 // (plain L.layerGroup fallback doesn't have zoomToShowLayer)
 function zoomToMarker(marker){
   if(!marker) return;
+  // After centering, nudge the view so the marker lands lower on screen, clear of the
+  // stacked buttons (Open Now / List / Surprise Me / Where am I?) in the top-right corner —
+  // on short viewports (tall header + Android Chrome's address bar), dead-center can end up
+  // hidden right underneath that button stack.
+  const nudgeDown = () => map.panBy([0, -110], { animate: false });
   if(typeof markerCluster.zoomToShowLayer === 'function'){
-    markerCluster.zoomToShowLayer(marker, () => marker.openPopup());
+    markerCluster.zoomToShowLayer(marker, () => {
+      nudgeDown();
+      marker.openPopup();
+    });
   } else {
     map.setView(marker.getLatLng(), 16);
+    nudgeDown();
     marker.openPopup();
   }
 }
@@ -1581,29 +1590,69 @@ document.getElementById('listViewToggle').addEventListener('click', () => {
 });
 document.getElementById('listViewClose').addEventListener('click', () => {
   document.getElementById('listViewPanel').classList.remove('show');
+  suppressNextLocateClick = true;
+  setTimeout(() => { suppressNextLocateClick = false; }, 400);
 });
 document.getElementById('listViewItems').addEventListener('click', (e) => {
   const item = e.target.closest('.list-item');
   if(!item) return;
+  e.preventDefault();
   const locId = item.dataset.locid;
   const marker = markers[locId];
-  document.getElementById('listViewPanel').classList.remove('show');
-  if(marker){
-    zoomToMarker(marker);
-  }
+  // Delay hiding the panel until after this click event fully finishes — hiding it
+  // synchronously here can cause Android Chrome to "ghost click" through to whatever
+  // sits underneath at the same screen coordinates (e.g. the Where am I? button).
+  setTimeout(() => {
+    document.getElementById('listViewPanel').classList.remove('show');
+    suppressNextLocateClick = true;
+    setTimeout(() => { suppressNextLocateClick = false; }, 400);
+    if(marker) zoomToMarker(marker);
+  }, 50);
 });
 
 // Surprise Me — picks a random spot, favoring ones nobody's rated yet
-document.getElementById('surpriseMeBtn').addEventListener('click', () => {
-  const unrated = seedLocations.filter(loc => {
+document.getElementById('surpriseMeBtn').addEventListener('click', async () => {
+  const btn = document.getElementById('surpriseMeBtn');
+  btn.disabled = true;
+  const originalText = btn.textContent;
+  btn.textContent = '🎲 Finding one...';
+
+  const pos = await getVerifiedPosition();
+  const isUnrated = loc => {
     const agg = ratingsCache[loc.id];
     return !agg || agg.bathroomCount === 0;
-  });
-  const pool = unrated.length > 0 ? unrated : seedLocations;
-  const pick = pool[Math.floor(Math.random() * pool.length)];
+  };
+
+  let pick;
+  if(pos){
+    const withDist = seedLocations.map(loc => ({
+      loc,
+      dist: milesBetween(pos.lat, pos.lng, loc.lat, loc.lng)
+    }));
+    // Tier 1: unrated AND within 20 miles — the ideal case
+    let candidates = withDist.filter(x => isUnrated(x.loc) && x.dist <= 20);
+    // Tier 2: no nearby unrated ones — widen to the 15 nearest unrated spots, regardless of distance
+    if(candidates.length === 0){
+      candidates = withDist.filter(x => isUnrated(x.loc)).sort((a,b) => a.dist - b.dist).slice(0, 15);
+    }
+    // Tier 3: everything's rated near you — just pick from the 15 nearest overall
+    if(candidates.length === 0){
+      candidates = [...withDist].sort((a,b) => a.dist - b.dist).slice(0, 15);
+    }
+    pick = candidates[Math.floor(Math.random() * candidates.length)].loc;
+  } else {
+    // No location available — fall back to any unrated spot on the whole map
+    const unrated = seedLocations.filter(isUnrated);
+    const pool = unrated.length > 0 ? unrated : seedLocations;
+    pick = pool[Math.floor(Math.random() * pool.length)];
+  }
+
   const marker = markers[pick.id];
   if(navigator.vibrate) navigator.vibrate(20);
   if(marker) zoomToMarker(marker);
+
+  btn.disabled = false;
+  btn.textContent = originalText;
 });
 
 
@@ -1621,7 +1670,9 @@ let userMarker = null;
 const locateBtn = document.getElementById('locateBtn');
 const nearestInfo = document.getElementById('nearestInfo');
 
+let suppressNextLocateClick = false;
 locateBtn.addEventListener('click', () => {
+  if(suppressNextLocateClick) return; // guards against an Android ghost-click right after closing another panel
   if(!navigator.geolocation){
     nearestInfo.style.display = 'block';
     nearestInfo.textContent = "Your browser doesn't support location.";
