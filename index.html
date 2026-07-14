@@ -326,8 +326,7 @@
       <li>🧭 First time using Directions, you'll pick Google Maps, Waze, or Apple Maps — it's remembered after that.</li>
       <li>🔗 <b>Share</b> a pin, or 🚩 <b>Report</b> a problem (wrong info, permanently closed, etc.) — right in each pin's popup.</li>
       <li>📋 Use <b>List</b> to browse every location, or <b>Where am I?</b> to find the closest one.</li>
-      <li>🏆 Claim a name on the <b>Leaderboard</b> to see how many spots you've rated compared to others.</li>
-      <li>👤 <b>Log in</b> (just a username & password, no email) to make your name and ratings follow you across devices instead of staying stuck to one phone. <b>No password recovery exists</b> — if you forget it, that username is gone for good.</li>
+      <li>👤 <b>Log in</b> (just a username & password, no email) to make your name and ratings follow you across devices, and to automatically appear on the <b>Leaderboard</b> under your username. <b>No password recovery exists</b> — if you forget it, that username is gone for good.</li>
     </ul>
     <p style="font-size:11.5px;color:#888;border-top:1px solid #ddd;padding-top:10px;margin-bottom:6px;">
       Unofficial fan project — not affiliated with or endorsed by Stewart's Shops. Store hours shown may vary or be out of date — always call ahead if it matters.
@@ -357,14 +356,7 @@
     maybe take a second to reflect on some of your recent life choices. We're not judging. We're
     right here with you.
   </p>
-  <div style="padding:14px 16px;border-bottom:1px solid #333;">
-    <div class="rating-label" style="color:var(--cream);margin-bottom:6px;">Your leaderboard name</div>
-    <div class="tip-input-row">
-      <input type="text" id="displayNameInput" maxlength="20" placeholder="e.g. Stewart S." style="background:#fff;color:#1c1c1e;" />
-      <button class="btn btn-amber" id="displayNameSave">Save</button>
-    </div>
-    <div class="save-note" id="displayNameNote" style="height:auto;"></div>
-  </div>
+  <div id="leaderboardAccountNote" style="padding:12px 16px;border-bottom:1px solid #333;color:var(--cream);font-size:13px;"></div>
   <div id="leaderboardItems" style="flex:1;overflow-y:auto;padding:8px 0;"></div>
 </div>
 
@@ -1013,10 +1005,15 @@ async function signUpAccount(username, password){
   if(!/^[a-zA-Z0-9_]+$/.test(clean)) return { ok: false, reason: 'Letters, numbers, and underscores only.' };
   if(password.length < 6) return { ok: false, reason: 'Password needs to be at least 6 characters.' };
   try{
-    const {auth, createUserWithEmailAndPassword} = await fb();
+    const {auth, createUserWithEmailAndPassword, db, doc, setDoc} = await fb();
     const oldAnonId = getClientId(); // capture before login changes what getEffectiveId() returns
     const cred = await createUserWithEmailAndPassword(auth, usernameToEmail(clean), password);
     await migrateAnonymousDataToAccount(oldAnonId, cred.user.uid, clean);
+    // Your account username automatically IS your leaderboard name — no separate step needed,
+    // since Firebase Auth already guarantees usernames are unique.
+    await setDoc(doc(db, 'displayNames', cred.user.uid), {
+      name: clean, nameLower: clean.toLowerCase(), updatedAt: Date.now()
+    }, { merge: true });
     return { ok: true };
   }catch(e){
     if(e.code === 'auth/email-already-in-use') return { ok: false, reason: 'That username is already taken.' };
@@ -1079,18 +1076,6 @@ async function migrateAnonymousDataToAccount(oldAnonId, newUid, username){
   }
 }
 
-// Leaderboard display names — tied to your account if logged in, otherwise your device.
-// Uniqueness is enforced by checking whether any OTHER identity already claimed it.
-async function loadMyDisplayName(){
-  try{
-    const {db, doc, getDoc} = await fb();
-    const snap = await getDoc(doc(db, 'displayNames', getEffectiveId()));
-    return snap.exists() ? snap.data().name : null;
-  }catch(e){
-    return null;
-  }
-}
-
 async function reportName(clientId, name){
   try{
     const {db, collection, addDoc} = await fb();
@@ -1099,32 +1084,6 @@ async function reportName(clientId, name){
   }catch(e){
     console.error('reportName failed', e);
     return false;
-  }
-}
-
-async function claimDisplayName(name){
-  const trimmed = name.trim().slice(0, 20);
-  if(!trimmed) return { ok: false, reason: 'Type a name first.' };
-  const normalized = trimmed.toLowerCase();
-  try{
-    const {db, doc, getDoc, setDoc, collection, query, where, getDocs} = await fb();
-    const myId = getEffectiveId();
-
-    // Check if anyone ELSE already has this name
-    const q = query(collection(db, 'displayNames'), where('nameLower', '==', normalized));
-    const snap = await getDocs(q);
-    const takenByOther = snap.docs.some(d => d.id !== myId);
-    if(takenByOther){
-      return { ok: false, reason: `"${trimmed}" is already taken — try another.` };
-    }
-
-    await setDoc(doc(db, 'displayNames', myId), {
-      name: trimmed, nameLower: normalized, updatedAt: Date.now()
-    });
-    return { ok: true, name: trimmed };
-  }catch(e){
-    console.error('claimDisplayName failed', e);
-    return { ok: false, reason: 'Something went wrong — try again.' };
   }
 }
 
@@ -1149,9 +1108,13 @@ async function loadLeaderboard(){
     const namesByClient = {};
     namesSnap.forEach(d => { namesByClient[d.id] = d.data().name; });
 
-    // Only show devices that have actually set a name — encourages naming yourself
+    const blocklistSnap = await getDocs(collection(db, 'leaderboardBlocklist'));
+    const blocked = new Set();
+    blocklistSnap.forEach(d => blocked.add(d.id));
+
+    // Only show devices that have actually set a name and aren't blocked from the board
     const ranked = Object.keys(locsByClient)
-      .filter(cid => namesByClient[cid])
+      .filter(cid => namesByClient[cid] && !blocked.has(cid))
       .map(cid => ({ clientId: cid, name: namesByClient[cid], count: locsByClient[cid].size }))
       .sort((a, b) => b.count - a.count)
       .slice(0, 20);
@@ -1918,9 +1881,19 @@ document.getElementById('listViewClose').addEventListener('click', () => {
 // Leaderboard panel
 async function openLeaderboard(){
   document.getElementById('leaderboardPanel').classList.add('show');
-  const nameInput = document.getElementById('displayNameInput');
-  const existingName = await loadMyDisplayName();
-  if(existingName) nameInput.value = existingName;
+
+  const noteEl = document.getElementById('leaderboardAccountNote');
+  if(isLoggedIn()){
+    const username = (window.__currentUser.email || '').split('@')[0];
+    noteEl.innerHTML = `You're on the board as <b style="color:var(--amber);">${escapeHtml(username)}</b>.`;
+  } else {
+    noteEl.innerHTML = `<button class="btn btn-amber" id="leaderboardLoginPrompt" style="width:100%;">👤 Log in to appear on the leaderboard</button>`;
+    document.getElementById('leaderboardLoginPrompt').addEventListener('click', () => {
+      document.getElementById('leaderboardPanel').classList.remove('show');
+      document.getElementById('accountPanel').classList.add('show');
+      updateAccountUI();
+    });
+  }
 
   const itemsEl = document.getElementById('leaderboardItems');
   itemsEl.innerHTML = '<div style="padding:16px;color:#999;">Loading...</div>';
@@ -1930,7 +1903,7 @@ async function openLeaderboard(){
     return;
   }
   if(ranked.length === 0){
-    itemsEl.innerHTML = '<div style="padding:16px;color:#999;">No one\'s claimed a name yet — be the first!</div>';
+    itemsEl.innerHTML = '<div style="padding:16px;color:#999;">No one\'s logged in and rated anything yet — be the first!</div>';
     return;
   }
   itemsEl.innerHTML = ranked.map((r, i) =>
@@ -2030,24 +2003,7 @@ document.getElementById('logOutBtn').addEventListener('click', async () => {
   document.getElementById('authPassword').value = '';
 });
 
-document.getElementById('displayNameSave').addEventListener('click', async () => {
-  const input = document.getElementById('displayNameInput');
-  const note = document.getElementById('displayNameNote');
-  const btn = document.getElementById('displayNameSave');
-  btn.disabled = true;
-  btn.textContent = '...';
-  const result = await claimDisplayName(input.value);
-  if(result.ok){
-    note.style.color = '#4caf50';
-    note.textContent = `Saved! You're "${result.name}" on the leaderboard.`;
-    openLeaderboard(); // refresh the list to reflect the change
-  } else {
-    note.style.color = '#e57373';
-    note.textContent = result.reason;
-  }
-  btn.disabled = false;
-  btn.textContent = 'Save';
-});
+
 
 document.getElementById('leaderboardItems').addEventListener('click', async (e) => {
   const btn = e.target.closest('.report-name-btn');

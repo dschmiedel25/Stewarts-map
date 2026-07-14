@@ -430,8 +430,11 @@ async function dismissReport(reportId){
 
 async function releaseName(clientId){
   try{
-    const {db, doc, deleteDoc} = await fb();
+    const {db, doc, deleteDoc, setDoc} = await fb();
     await deleteDoc(doc(db, 'displayNames', clientId));
+    // Also block this account from silently reappearing on next login — otherwise releasing
+    // an inappropriate username wouldn't actually stick, since the username itself is unchanged
+    await setDoc(doc(db, 'leaderboardBlocklist', clientId), { blockedAt: Date.now() });
     return true;
   }catch(e){
     console.error('releaseName failed', e);
