@@ -7,7 +7,7 @@
   import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
   import {
     getFirestore, collection, getDocs, doc, updateDoc, deleteDoc, arrayRemove,
-    arrayUnion, increment, setDoc
+    arrayUnion, increment, setDoc, query, where
   } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 
   const firebaseConfig = {
@@ -21,7 +21,7 @@
   };
   const fbApp = initializeApp(firebaseConfig);
   const db = getFirestore(fbApp);
-  window.__fb = { db, collection, getDocs, doc, updateDoc, deleteDoc, arrayRemove, arrayUnion, increment, setDoc };
+  window.__fb = { db, collection, getDocs, doc, updateDoc, deleteDoc, arrayRemove, arrayUnion, increment, setDoc, query, where };
 </script>
 <style>
   body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;background:#1c1c1e;color:#fdf6e9;padding:16px;}
@@ -72,26 +72,15 @@
   </tbody>
 </table>
 
-<h2 style="font-size:16px;margin:20px 0 8px;">👤 Raters (spam check)</h2>
-<p style="color:#999;font-size:12px;margin:0 0 8px;">Each row is one anonymous device/browser. Sorted by most active first — a device with an unusually high count relative to everyone else is worth a closer look.</p>
-<table style="margin-bottom:24px;">
-  <thead>
-    <tr><th>Device ID</th><th># Rated</th><th>Last Activity</th><th>Details</th></tr>
-  </thead>
-  <tbody id="ratersBody">
-    <tr><td colspan="4" class="loading">Loading…</td></tr>
-  </tbody>
-</table>
-
 <h2 style="font-size:16px;margin:20px 0 8px;">All Locations</h2>
 <input type="text" id="filterBox" placeholder="Filter by name, address, or store #..." />
 
 <table>
   <thead>
-    <tr><th>Location</th><th id="th-store" style="cursor:pointer;">Store ⇅</th><th id="th-bathroom" style="cursor:pointer;">Bathroom ⇅</th><th id="th-reviews" style="cursor:pointer;">Reviews ⇅</th><th>Tips</th></tr>
+    <tr><th>Location</th><th id="th-store" style="cursor:pointer;">Store ⇅</th><th id="th-bathroom" style="cursor:pointer;">Bathroom ⇅</th><th id="th-reviews" style="cursor:pointer;">Reviews ⇅</th><th>Tips</th><th>Actions</th></tr>
   </thead>
   <tbody id="tableBody">
-    <tr><td colspan="5" class="loading">Loading data from Firestore…</td></tr>
+    <tr><td colspan="6" class="loading">Loading data from Firestore…</td></tr>
   </tbody>
 </table>
 
@@ -372,7 +361,9 @@ const seedLocations = [
 {"n":"Harden Blvd, Camden","lat":43.330787,"lng":-75.747461,"addr":"3 Harden Blvd, Camden, NY 13316","id":"camden-hardenblvd"},
 {"n":"Erie Blvd W, Rome","lat":43.214051,"lng":-75.467463,"addr":"506 Erie Blvd W, Rome, NY 13440","id":"rome-erieblvdw"},
 {"n":"Floyd Ave, Rome","lat":43.222909,"lng":-75.420290,"addr":"1373 Floyd Ave, Rome, NY 13440","id":"rome-floydave"},
-{"n":"Turin Rd, Rome","lat":43.303095,"lng":-75.472770,"addr":"9128 Turin Rd, Rome, NY 13440","id":"rome-turinrd"}
+{"n":"Turin Rd, Rome","lat":43.303095,"lng":-75.472770,"addr":"9128 Turin Rd, Rome, NY 13440","id":"rome-turinrd"},
+{"n":"Mexico, NY","lat":43.459266,"lng":-76.232011,"addr":"Mexico, NY 13114","id":"mexico-ny"},
+{"n":"Brown St, Dexter","lat":44.007481,"lng":-76.044237,"addr":"308 Brown St, Dexter, NY 13634","id":"dexter-brownst"}
 ];
 
 async function fb(){
@@ -421,33 +412,36 @@ async function dismissMissing(missingId){
   }
 }
 
-// Undo everything a device rated (reversing its impact on every average) and block it from rating again
-async function removeAndBlockDevice(clientId, entries){
+// Fully reset one location — clears its rating averages, deletes its tips, and removes
+// everyone's individual votes for it (so a fresh visitor starts that location at zero again)
+async function resetLocation(locId){
   try{
-    const {db, doc, updateDoc, deleteDoc, increment, setDoc} = await fb();
-    for(const entry of entries){
-      const aggRef = doc(db, 'aggregates', entry.locId);
-      const updates = {};
-      if(entry.store > 0){
-        updates.storeSum = increment(-entry.store);
-        updates.storeCount = increment(-1);
-      }
-      if(entry.bathroom > 0){
-        updates.bathroomSum = increment(-entry.bathroom);
-        updates.bathroomCount = increment(-1);
-      }
-      if(Object.keys(updates).length > 0){
-        await updateDoc(aggRef, updates);
-      }
-      await deleteDoc(doc(db, 'votes', entry.locId + '_' + clientId));
+    const {db, doc, setDoc, deleteDoc, collection, query, where, getDocs} = await fb();
+
+    // Zero out the shared aggregate (full overwrite, not merge, to clear any stray fields too)
+    await setDoc(doc(db, 'aggregates', locId), {
+      storeSum: 0, storeCount: 0, bathroomSum: 0, bathroomCount: 0
+    });
+
+    // Delete the tips list for this location entirely
+    await deleteDoc(doc(db, 'tips', locId)).catch(() => {}); // fine if it never existed
+
+    // Delete every individual vote record tied to this location, so devices that already
+    // rated it don't keep showing a stale personal vote out of sync with the reset average
+    const votesQuery = query(collection(db, 'votes'), where('locId', '==', locId));
+    const votesSnap = await getDocs(votesQuery);
+    for(const voteDoc of votesSnap.docs){
+      await deleteDoc(voteDoc.ref);
     }
-    await setDoc(doc(db, 'blockedDevices', clientId), { blockedAt: Date.now() });
+
     return true;
   }catch(e){
-    console.error('removeAndBlockDevice failed', e);
+    console.error('resetLocation failed', e);
     return false;
   }
 }
+
+// Undo everything a device rated (reversing its impact on every average) and block it from rating again
 
 // Edit an existing tip's text (remove old string, add new one — Firestore array fields don't support in-place edits)
 async function editTip(locId, oldText, newText){
@@ -539,79 +533,13 @@ async function loadAll(){
     document.getElementById('missingBody').innerHTML = '<tr><td colspan="3" class="loading">Could not load — check Firestore rules for the missingReports collection.</td></tr>';
   }
 
-  try{
-    const votesSnap = await getDocs(collection(db, 'votes'));
-    const locNameById = {};
-    seedLocations.forEach(l => { locNameById[l.id] = l.n; });
-
-    const byClient = {}; // clientId -> { entries: [...], lastActivity }
-    votesSnap.forEach(d => {
-      const v = d.data();
-      const clientId = v.clientId || 'unknown';
-      const locId = v.locId || d.id.split('_')[0];
-      if(!byClient[clientId]) byClient[clientId] = { entries: [], lastActivity: 0 };
-      byClient[clientId].entries.push({
-        locId,
-        locName: locNameById[locId] || locId,
-        store: v.store || 0,
-        bathroom: v.bathroom || 0,
-        lastUpdated: v.lastUpdated || 0
-      });
-      if((v.lastUpdated || 0) > byClient[clientId].lastActivity){
-        byClient[clientId].lastActivity = v.lastUpdated || 0;
-      }
-    });
-
-    const raters = Object.keys(byClient).map(clientId => ({
-      clientId,
-      count: byClient[clientId].entries.length,
-      lastActivity: byClient[clientId].lastActivity,
-      entries: byClient[clientId].entries.sort((a,b) => (b.lastUpdated||0) - (a.lastUpdated||0))
-    }));
-    raters.sort((a, b) => b.count - a.count);
-
-    // Flag anything meaningfully above the typical rater's activity as worth a look
-    const avgCount = raters.length ? raters.reduce((s,r) => s + r.count, 0) / raters.length : 0;
-    const spamThreshold = Math.max(10, avgCount * 3);
-
-    const ratersBody = document.getElementById('ratersBody');
-    if(raters.length === 0){
-      ratersBody.innerHTML = '<tr><td colspan="4" class="loading">No ratings submitted yet.</td></tr>';
-    } else {
-      window.__ratersData = {}; // clientId -> entries, so the block button can look up full data
-      ratersBody.innerHTML = raters.map(r => {
-        const shortId = r.clientId.length > 14 ? r.clientId.slice(0, 14) + '…' : r.clientId;
-        const when = r.lastActivity ? new Date(r.lastActivity).toLocaleString() : '—';
-        const flag = r.count >= spamThreshold ? ' ⚠️' : '';
-        const detailsList = r.entries.slice(0, 25).map(e =>
-          `${escapeHtml(e.locName)} (Store ${e.store||'–'}★, Bath ${e.bathroom||'–'}★)`
-        ).join('<br>');
-        const detailsId = 'raterdetails-' + shortId.replace(/[^a-zA-Z0-9]/g,'');
-        window.__ratersData[r.clientId] = r.entries;
-        return `<tr>
-          <td style="font-family:monospace;font-size:11px;">${escapeHtml(shortId)}${flag}</td>
-          <td>${r.count}</td>
-          <td style="color:#999;">${when}</td>
-          <td>
-              <button class="toggle-details-btn" data-target="${detailsId}" style="background:#444;color:#fff;border:none;border-radius:6px;padding:5px 10px;font-size:12px;cursor:pointer;">View</button>
-              <button class="block-rater-btn" data-clientid="${r.clientId}" style="background:#b71c1c;color:#fff;border:none;border-radius:6px;padding:5px 10px;font-size:12px;cursor:pointer;margin-left:4px;">🚫 Remove &amp; Block</button>
-              <div id="${detailsId}" style="display:none;margin-top:6px;font-size:12px;color:#ccc;">${detailsList}</div>
-          </td>
-        </tr>`;
-      }).join('');
-    }
-  }catch(e){
-    console.error('Failed to load votes for rater view', e);
-    document.getElementById('ratersBody').innerHTML = '<tr><td colspan="4" class="loading">Could not load rater data.</td></tr>';
-  }
-
   refreshTable();
 }
 
 function renderTable(rows){
   const body = document.getElementById('tableBody');
   if(rows.length === 0){
-    body.innerHTML = '<tr><td colspan="5" class="loading">No matches.</td></tr>';
+    body.innerHTML = '<tr><td colspan="6" class="loading">No matches.</td></tr>';
     return;
   }
   body.innerHTML = rows.map(r => {
@@ -632,6 +560,7 @@ function renderTable(rows){
       <td class="bathAvg">${avgStr(agg.bathroomSum, agg.bathroomCount)}★ (${agg.bathroomCount||0})</td>
       <td>${(agg.storeCount||0) + (agg.bathroomCount||0)}</td>
       <td>${tipsHtml}</td>
+      <td><button class="reset-location-btn" data-locid="${loc.id}" data-locname="${escapeHtml(loc.n)}" style="background:#b71c1c;color:#fff;border:none;border-radius:6px;padding:6px 10px;font-size:12px;cursor:pointer;white-space:nowrap;">🗑️ Reset</button></td>
     </tr>`;
   }).join('');
 }
@@ -745,6 +674,32 @@ document.getElementById('tableBody').addEventListener('click', async (e) => {
       alert('Could not save — try again.');
       refreshTable();
     }
+    return;
+  }
+
+  const resetBtn = e.target.closest('.reset-location-btn');
+  if(resetBtn){
+    const locId = resetBtn.dataset.locid;
+    const locName = resetBtn.dataset.locname;
+    const confirmed = confirm(
+      `Reset ALL ratings and tips for "${locName}"?\n\nThis clears its store & bathroom averages back to zero, deletes every tip, and clears everyone's individual votes for it. This cannot be undone.`
+    );
+    if(!confirmed) return;
+    resetBtn.disabled = true;
+    resetBtn.textContent = 'Resetting...';
+    const ok = await resetLocation(locId);
+    if(ok){
+      const row = allRows.find(r => r.loc.id === locId);
+      if(row){
+        row.agg = { storeSum: 0, storeCount: 0, bathroomSum: 0, bathroomCount: 0 };
+        row.tips = [];
+      }
+      refreshTable();
+    } else {
+      alert('Something went wrong — try again.');
+      resetBtn.disabled = false;
+      resetBtn.textContent = '🗑️ Reset';
+    }
   }
 });
 
@@ -781,39 +736,6 @@ document.getElementById('missingBody').addEventListener('click', async (e) => {
     alert('Could not dismiss — try again.');
     btn.disabled = false;
     btn.textContent = '✕ Dismiss';
-  }
-});
-
-document.getElementById('ratersBody').addEventListener('click', async (e) => {
-  const toggleBtn = e.target.closest('.toggle-details-btn');
-  if(toggleBtn){
-    const target = document.getElementById(toggleBtn.dataset.target);
-    if(!target) return;
-    const isOpen = target.style.display !== 'none';
-    target.style.display = isOpen ? 'none' : 'block';
-    toggleBtn.textContent = isOpen ? 'View' : 'Hide';
-    return;
-  }
-
-  const blockBtn = e.target.closest('.block-rater-btn');
-  if(blockBtn){
-    const clientId = blockBtn.dataset.clientid;
-    const entries = (window.__ratersData && window.__ratersData[clientId]) || [];
-    const confirmed = confirm(
-      `Remove all ${entries.length} rating(s) from this device and block it from rating again?\n\nThis cannot be undone.`
-    );
-    if(!confirmed) return;
-    blockBtn.disabled = true;
-    blockBtn.textContent = 'Working...';
-    const ok = await removeAndBlockDevice(clientId, entries);
-    if(ok){
-      blockBtn.closest('tr').innerHTML = `<td colspan="4" style="color:#4caf50;">✅ Removed and blocked.</td>`;
-      loadAll(); // refresh everything since averages just changed
-    } else {
-      alert('Something went wrong — try again.');
-      blockBtn.disabled = false;
-      blockBtn.textContent = '🚫 Remove & Block';
-    }
   }
 });
 
