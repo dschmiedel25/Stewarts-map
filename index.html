@@ -39,10 +39,18 @@
     --charcoal:#1c1c1e; --amber:#f5a623; --cream:#fdf6e9; --green:#2f6b3c;
     --header-grad-top:#161616; --muted:#c9c2b3; --panel-bg:rgba(28,28,30,.92);
     --panel-border:#444; --placeholder:#aaa;
+    /* Popup card colors — deliberately its own deep slate/navy in dark mode, not just
+       the app's plain charcoal, so it reads as a distinct "card" floating over the map */
+    --popup-bg:#1e2d3a; --popup-text:#eef2f5; --popup-muted:#9fb0bb; --popup-border:#33454f;
+    --popup-divider:#33454f; --popup-report-bg:#3a2226; --popup-tip-input-bg:#16232c;
+    --popup-star-empty:#425c6b;
   }
   html[data-theme="light"]{
     --charcoal:#f3efe3; --cream:#1c1c1e; --header-grad-top:#ffffff;
     --muted:#555; --panel-bg:rgba(255,255,255,.92); --panel-border:#ccc; --placeholder:#888;
+    --popup-bg:#fffaf0; --popup-text:#1c1c1e; --popup-muted:#666; --popup-border:#eee;
+    --popup-divider:#eee; --popup-report-bg:#fdecea; --popup-tip-input-bg:#ffffff;
+    --popup-star-empty:#ddd;
   }
   *{box-sizing:border-box;}
   html, body{margin:0;height:100%;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;background:var(--charcoal);color:var(--cream);}
@@ -59,11 +67,13 @@
   #map.dark-map-tiles .leaflet-tile-pane{
     filter: invert(1) hue-rotate(180deg) brightness(0.95) contrast(0.9);
   }
-  .leaflet-popup-content-wrapper{background:#fffaf0;border-radius:10px;}
-  .popup-inner{min-width:230px;font-size:14px;max-height:56vh;overflow-y:auto;}
-  .popup-inner h3{margin:0 0 3px;font-size:15.5px;color:#1c1c1e;}
-  .popup-inner .addr{color:#666;font-size:11.5px;margin-bottom:6px;}
-  .hours-line{color:#555;font-size:12px;margin-bottom:8px;}
+  .leaflet-popup-content-wrapper{background:var(--popup-bg);border-radius:10px;}
+  .leaflet-popup-tip{background:var(--popup-bg);}
+  .leaflet-popup-close-button{color:var(--popup-muted) !important;}
+  .popup-inner{min-width:230px;font-size:14px;max-height:56vh;overflow-y:auto;color:var(--popup-text);}
+  .popup-inner h3{margin:0 0 3px;font-size:15.5px;color:var(--popup-text);}
+  .popup-inner .addr{color:var(--popup-muted);font-size:11.5px;margin-bottom:6px;}
+  .hours-line{color:var(--popup-muted);font-size:12px;margin-bottom:8px;}
   /* Reusable button base — used by Directions, Share, Report toggle, and tip/report submit buttons */
   .btn{
     display:inline-block;border:none;text-decoration:none;cursor:pointer;
@@ -72,7 +82,8 @@
   .btn-primary{background:#0d47a1;color:#fff !important;}
   .btn-primary:visited, .btn-primary:hover{color:#fff !important;}
   .btn-secondary{background:#444;color:#fff;}
-  .btn-danger{background:#b71c1c;color:#fff;}
+  .btn-danger{background:#2b2b2b;color:#fff;border:2px solid #e53935;}
+  .btn-icon-only{padding:7px 11px;font-size:15px;}
   .btn-amber{background:var(--amber);color:#1c1c1e;font-weight:700;flex:none;}
   .popup-actions{display:flex;gap:6px;margin-bottom:6px;flex-wrap:wrap;}
   .nav-change-btn{padding:7px 9px;flex:none;}
@@ -81,22 +92,22 @@
     background:#f0f0f0;border-radius:6px;
   }
   .nav-chooser .nav-choice-btn{width:100%;text-align:center;}
-  .report-section{margin-bottom:10px;padding:8px;background:#fdecea;border-radius:6px;}
+  .report-section{margin-bottom:10px;padding:8px;background:var(--popup-report-bg);border-radius:6px;}
   .rating-row{margin:6px 0;}
-  .rating-label{font-weight:600;font-size:13px;color:#333;display:block;margin-bottom:3px;}
-  .star-quip{font-size:11.5px;font-style:italic;color:#777;margin-top:2px;min-height:13px;}
+  .rating-label{font-weight:600;font-size:13px;color:var(--popup-text);display:block;margin-bottom:3px;}
+  .star-quip{font-size:11.5px;font-style:italic;color:var(--popup-muted);margin-top:2px;min-height:13px;}
   .stars{font-size:24px;letter-spacing:3px;cursor:pointer;}
-  .stars span{cursor:pointer;color:#ddd;transition:color .1s;}
+  .stars span{cursor:pointer;color:var(--popup-star-empty);transition:color .1s;}
   .stars span.filled{color:var(--amber);}
-  .save-note{font-size:12px;color:#2f6b3c;margin-top:5px;height:16px;}
-  .tips-section{margin-top:8px;padding-top:6px;border-top:1px solid #eee;}
+  .save-note{font-size:12px;color:var(--green);margin-top:5px;height:16px;}
+  .tips-section{margin-top:8px;padding-top:6px;border-top:1px solid var(--popup-divider);}
   .tips-list{list-style:none;margin:6px 0 8px;padding:0;max-height:110px;overflow-y:auto;}
-  .tips-list li{font-size:13px;color:#444;padding:4px 0;border-bottom:1px dashed #eee;}
+  .tips-list li{font-size:13px;color:var(--popup-text);padding:4px 0;border-bottom:1px dashed var(--popup-divider);}
   /* Shared by the tips box, report box, and missing-location box */
   .tip-input-row{display:flex;gap:8px;margin-bottom:4px;}
   .tip-input{
-    flex:1;font-size:16px;padding:8px 10px;border:1px solid #ccc;border-radius:6px;
-    min-width:0;
+    flex:1;font-size:16px;padding:8px 10px;border:1px solid var(--popup-border);border-radius:6px;
+    min-width:0;background:var(--popup-tip-input-bg);color:var(--popup-text);
   }
   #legend{
     position:absolute;top:10px;left:10px;z-index:500;background:var(--panel-bg);
@@ -143,8 +154,8 @@
   }
   #missingPanel{
     position:absolute;bottom:68px;left:10px;z-index:500;
-    background:#fffaf0;border-radius:10px;padding:12px 14px;width:220px;
-    box-shadow:0 4px 16px rgba(0,0,0,.5);display:none;
+    background:#fffaf0;border-radius:10px;padding:14px 16px;width:250px;
+    box-shadow:0 4px 16px rgba(0,0,0,.5);display:none;border:2px solid var(--amber);
   }
   #missingPanel.show{display:block;}
   #missingPanel .tip-input-row{display:flex;gap:6px;}
@@ -152,8 +163,8 @@
     flex:1;font-size:16px;padding:8px;border:1px solid #ccc;border-radius:6px;min-width:0;
   }
   #missingUseLocationBtn{
-    display:block;width:100%;margin-top:8px;background:#e3f2fd;color:#0d47a1;border:1px solid #90caf9;
-    font-size:11.5px;font-weight:700;padding:6px;border-radius:6px;cursor:pointer;
+    display:block;width:100%;margin-top:0;background:#1e88e5;color:#fff;border:none;
+    font-size:12px;font-weight:700;padding:8px;border-radius:6px;cursor:pointer;
   }
   #onboardingOverlay{
     position:fixed;inset:0;z-index:3000;background:rgba(0,0,0,.75);
@@ -247,14 +258,12 @@
 <button id="locateBtn">📍 Where am I?</button>
 <div id="nearestInfo"></div>
 
-<button id="missingBtn">📍 Missing a spot?</button>
+<button id="missingBtn">📍 We Missed One?</button>
 <div id="missingPanel">
-  <div class="rating-label" style="color:#333;">What's missing?</div>
-  <div class="tip-input-row">
-    <input type="text" id="missingInput" maxlength="120" placeholder="Address or cross streets" />
-    <button class="btn btn-amber tip-submit" id="missingSubmit">Send</button>
-  </div>
-  <button id="missingUseLocationBtn" type="button">📍 Use my current location instead</button>
+  <div class="rating-label" style="color:#b5750f;font-size:15px;">What'd we miss?</div>
+  <input type="text" id="missingInput" maxlength="120" placeholder="Address or cross streets" style="width:100%;margin-bottom:8px;" />
+  <button class="btn btn-amber tip-submit" id="missingSubmit" style="width:100%;margin-bottom:8px;">Send it in</button>
+  <button id="missingUseLocationBtn" type="button">📍 Use my location instead</button>
   <div class="save-note" id="missingNote"></div>
 </div>
 
@@ -266,6 +275,7 @@
       <li>📍 <b>Tap any pin</b> to rate the store & bathroom, leave a tip, or get directions.</li>
       <li>🕐 Hours shown are <b>live</b> — the map knows if a spot is open right now.</li>
       <li>🧭 First time using Directions, you'll pick Google Maps, Waze, or Apple Maps — it's remembered after that.</li>
+      <li>🔗 <b>Share</b> a pin, or 🚩 <b>Report</b> a problem (wrong info, permanently closed, etc.) — right in each pin's popup.</li>
       <li>📋 Use <b>List</b> to browse every location, or <b>Where am I?</b> to find the closest one.</li>
     </ul>
     <p style="font-size:11.5px;color:#888;border-top:1px solid #ddd;padding-top:10px;margin-bottom:6px;">
@@ -981,8 +991,8 @@ function popupHtml(loc, agg, myVote){
     <div class="popup-actions">
       <button class="btn btn-primary directions-btn" id="directions-btn-${loc.id}" data-lat="${loc.lat}" data-lng="${loc.lng}">🧭 Directions</button>
       <button class="btn btn-secondary nav-change-btn" id="nav-change-${loc.id}" title="Change navigation app">⚙️</button>
-      <button class="btn btn-secondary share-btn" data-shareurl="${shareUrl}" data-sharename="${loc.n.replace(/"/g,'&quot;')}">🔗 Share</button>
-      <button class="btn btn-danger report-toggle-btn" id="report-toggle-${loc.id}">🚩 Report</button>
+      <button class="btn btn-secondary btn-icon-only share-btn" title="Share" data-shareurl="${shareUrl}" data-sharename="${loc.n.replace(/"/g,'&quot;')}">🔗</button>
+      <button class="btn btn-danger btn-icon-only report-toggle-btn" title="Report an issue" id="report-toggle-${loc.id}">🚩</button>
     </div>
     <div class="nav-chooser" id="nav-chooser-${loc.id}" style="display:none;">
       <div class="rating-label" style="color:#333;">Open directions with:</div>
@@ -1108,8 +1118,8 @@ function attachShareHandler(loc){
     } else if(navigator.clipboard){
       try{
         await navigator.clipboard.writeText(url);
-        newBtn.textContent = '✅ Link copied';
-        setTimeout(() => { newBtn.textContent = '🔗 Share'; }, 2000);
+        newBtn.textContent = '✅';
+        setTimeout(() => { newBtn.textContent = '🔗'; }, 2000);
       }catch(e){ /* clipboard blocked — nothing we can do silently */ }
     }
   });
