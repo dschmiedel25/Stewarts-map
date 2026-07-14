@@ -7,10 +7,10 @@
 <link rel="icon" href="icon-512.png">
 <link rel="apple-touch-icon" href="apple-touch-icon.png">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css" />
-<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js" crossorigin="anonymous"></script>
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet.markercluster/1.5.3/MarkerCluster.css" />
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet.markercluster/1.5.3/MarkerCluster.Default.css" />
-<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet.markercluster/1.5.3/leaflet.markercluster.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet.markercluster/1.5.3/leaflet.markercluster.js" crossorigin="anonymous"></script>
 <script type="module">
   import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
   import {
@@ -121,15 +121,20 @@
     background:var(--panel-bg);color:var(--cream);border:1px solid var(--panel-border);
     padding:5px 10px;border-radius:6px;cursor:pointer;
   }
+  #surpriseMeBtn{
+    position:absolute;top:78px;right:10px;z-index:500;font-size:12px;font-weight:700;
+    background:var(--panel-bg);color:var(--cream);border:1px solid var(--panel-border);
+    padding:5px 10px;border-radius:6px;cursor:pointer;
+  }
   .dot{display:inline-block;width:10px;height:10px;border-radius:50%;margin-right:5px;}
   #locateBtn{
-    position:absolute;top:88px;right:10px;z-index:500;
+    position:absolute;top:122px;right:10px;z-index:500;
     background:#2196f3;color:#fff;border:none;border-radius:50px;
     padding:11px 14px;font-weight:700;font-size:13.5px;box-shadow:0 3px 10px rgba(0,0,0,.4);
     cursor:pointer;
   }
   #nearestInfo{
-    position:absolute;top:136px;right:10px;z-index:500;
+    position:absolute;top:170px;right:10px;z-index:500;
     background:var(--panel-bg);color:var(--cream);border:1px solid #2196f3;
     border-radius:8px;padding:8px 12px;font-size:13px;max-width:220px;display:none;
     cursor:pointer;line-height:1.4;
@@ -155,6 +160,19 @@
     display:block;width:100%;margin-top:8px;background:#e3f2fd;color:#0d47a1;border:1px solid #90caf9;
     font-size:11.5px;font-weight:700;padding:6px;border-radius:6px;cursor:pointer;
   }
+  #onboardingOverlay{
+    position:fixed;inset:0;z-index:3000;background:rgba(0,0,0,.75);
+    display:none;align-items:center;justify-content:center;padding:20px;
+  }
+  #onboardingOverlay.show{display:flex;}
+  #onboardingCard{
+    background:#fffaf0;border-radius:14px;padding:22px;max-width:340px;color:#1c1c1e;
+    box-shadow:0 8px 30px rgba(0,0,0,.5);
+  }
+  #onboardingCard h2{margin:0 0 8px;font-size:20px;}
+  #onboardingCard p{margin:0 0 8px;font-size:14px;color:#444;}
+  #onboardingCard ul{margin:0 0 16px;padding-left:20px;font-size:13.5px;line-height:1.6;color:#333;}
+  #onboardingCard li{margin-bottom:6px;}
   #listViewPanel{
     position:absolute;inset:0;z-index:1500;background:var(--charcoal);display:none;
     flex-direction:column;
@@ -228,6 +246,7 @@
 
 <button id="openNowToggle">🕐 Open now</button>
 <button id="listViewToggle">📋 List</button>
+<button id="surpriseMeBtn">🎲 Surprise Me</button>
 
 <div id="map"></div>
 <button id="locateBtn">📍 Where am I?</button>
@@ -242,6 +261,21 @@
   </div>
   <button id="missingUseLocationBtn" type="button">📍 Use my current location instead</button>
   <div class="save-note" id="missingNote"></div>
+</div>
+
+<div id="onboardingOverlay">
+  <div id="onboardingCard">
+    <h2>🚽 Welcome!</h2>
+    <p>Quick tour:</p>
+    <ul>
+      <li>📍 <b>Tap any pin</b> to rate the store & bathroom, leave a tip, or get directions.</li>
+      <li>🕐 Hours shown are <b>live</b> — the map knows if a spot is open right now.</li>
+      <li>🧭 First time using Directions, you'll pick Google Maps, Waze, or Apple Maps — it's remembered after that.</li>
+      <li>📋 Use <b>List</b> to browse every location, or <b>Where am I?</b> to find the closest one.</li>
+      <li>🎲 Feeling adventurous? Try <b>Surprise Me</b> for a random pick.</li>
+    </ul>
+    <button id="onboardingClose" class="btn btn-amber" style="width:100%;">Got it!</button>
+  </div>
 </div>
 
 <div id="listViewPanel">
@@ -529,7 +563,9 @@ const seedLocations = [
 {"n":"Harden Blvd, Camden","lat":43.330787,"lng":-75.747461,"addr":"3 Harden Blvd, Camden, NY 13316","id":"camden-hardenblvd"},
 {"n":"Erie Blvd W, Rome","lat":43.214051,"lng":-75.467463,"addr":"506 Erie Blvd W, Rome, NY 13440","id":"rome-erieblvdw","hrs":"0430-2400"},
 {"n":"Floyd Ave, Rome","lat":43.222909,"lng":-75.420290,"addr":"1373 Floyd Ave, Rome, NY 13440","id":"rome-floydave","hrs":"0400-0100"},
-{"n":"Turin Rd, Rome","lat":43.303095,"lng":-75.472770,"addr":"9128 Turin Rd, Rome, NY 13440","id":"rome-turinrd","hrs":"0430-2400"}
+{"n":"Turin Rd, Rome","lat":43.303095,"lng":-75.472770,"addr":"9128 Turin Rd, Rome, NY 13440","id":"rome-turinrd","hrs":"0430-2400"},
+{"n":"Mexico, NY","lat":43.459266,"lng":-76.232011,"addr":"Mexico, NY 13114","id":"mexico-ny"},
+{"n":"Brown St, Dexter","lat":44.007481,"lng":-76.044237,"addr":"308 Brown St, Dexter, NY 13634","id":"dexter-brownst"}
 ];
 
 // Theme: defaults to the phone's system light/dark setting, but a manual toggle overrides it
@@ -566,18 +602,63 @@ document.getElementById('themeToggle').addEventListener('click', () => {
   });
 })();
 
-const map = L.map('map', { zoomControl: false }).setView([42.75, -73.80], 12);
+const map = L.map('map', { zoomControl: false, maxZoom: 19 }).setView([42.75, -73.80], 12);
 L.control.zoom({ position: 'bottomright' }).addTo(map);
 
 // Cluster group — groups nearby pins into a single bubble at wide zoom levels, since the
 // map now spans a huge area (Syracuse to Vermont to the Hudson Valley)
-const markerCluster = L.markerClusterGroup({
-  maxClusterRadius: 50,
-  spiderfyOnMaxZoom: true,
-  showCoverageOnHover: false,
-  disableClusteringAtZoom: 15
-});
-map.addLayer(markerCluster);
+let markerCluster;
+try{
+  markerCluster = L.markerClusterGroup({
+    maxClusterRadius: 50,
+    spiderfyOnMaxZoom: true,
+    showCoverageOnHover: false,
+    disableClusteringAtZoom: 15,
+    iconCreateFunction: function(cluster){
+      // Color the cluster bubble the same way individual pins are colored — by average
+      // bathroom rating of the locations inside it — instead of the plugin's default
+      // size-based traffic-light colors.
+      const childMarkers = cluster.getAllChildMarkers();
+      let sumOfAverages = 0, ratedCount = 0;
+      childMarkers.forEach(m => {
+        const agg = ratingsCache[m.locId];
+        if(agg && agg.bathroomCount > 0){
+          sumOfAverages += (agg.bathroomSum / agg.bathroomCount);
+          ratedCount++;
+        }
+      });
+      const color = ratedCount > 0
+        ? bathroomColor({ bathroomSum: sumOfAverages, bathroomCount: ratedCount })
+        : '#8a8a8a';
+      const childCount = cluster.getChildCount();
+      return L.divIcon({
+        html: `<div style="background:${color};width:40px;height:40px;border-radius:50%;display:flex;align-items:center;justify-content:center;border:3px solid #fff;box-shadow:0 0 4px rgba(0,0,0,.6);color:#fff;font-weight:800;font-size:14px;">${childCount}</div>`,
+        className: '',
+        iconSize: [40, 40]
+      });
+    }
+  });
+  map.addLayer(markerCluster);
+}catch(e){
+  // The clustering plugin failed to load or is incompatible (CDN hiccup, blocker, version
+  // mismatch, etc.) — fall back to a plain group so the map and pins still work, just
+  // without the cluster-bubble visual.
+  console.error('Marker clustering unavailable, falling back to a plain layer group:', e);
+  markerCluster = L.layerGroup();
+  map.addLayer(markerCluster);
+}
+
+// Safely jump to and open a marker's popup, whether clustering is active or not
+// (plain L.layerGroup fallback doesn't have zoomToShowLayer)
+function zoomToMarker(marker){
+  if(!marker) return;
+  if(typeof markerCluster.zoomToShowLayer === 'function'){
+    markerCluster.zoomToShowLayer(marker, () => marker.openPopup());
+  } else {
+    map.setView(marker.getLatLng(), 16);
+    marker.openPopup();
+  }
+}
 
 // Safety net: recalculate map size whenever the viewport or layout might have changed
 window.addEventListener('resize', () => map.invalidateSize());
@@ -593,12 +674,14 @@ map.on('popupopen', () => {
   document.getElementById('legendBody').classList.add('collapsed');
   document.getElementById('openNowToggle').style.display = 'none';
   document.getElementById('listViewToggle').style.display = 'none';
+  document.getElementById('surpriseMeBtn').style.display = 'none';
 });
 map.on('popupclose', () => {
   document.getElementById('locateBtn').style.display = '';
   document.getElementById('missingBtn').style.display = '';
   document.getElementById('openNowToggle').style.display = '';
   document.getElementById('listViewToggle').style.display = '';
+  document.getElementById('surpriseMeBtn').style.display = '';
   const wasCollapsed = localStorage.getItem('legendCollapsed') === '1';
   if(!wasCollapsed) document.getElementById('legendBody').classList.remove('collapsed');
 });
@@ -670,14 +753,21 @@ function makeIcon(id){
   const color = bathroomColor(agg);
   const sizes = sizesForZoom(map.getZoom());
   const size = communityRated ? sizes.rated : sizes.unrated;
+  // Show the rounded star number on the pin itself — not just color — so it's still
+  // readable for colorblind users where red/orange/yellow/green can look similar.
+  const roundedStar = communityRated ? Math.round(agg.bathroomSum / agg.bathroomCount) : null;
+  const labelHtml = roundedStar
+    ? `<span style="color:#fff;font-weight:800;font-size:${Math.round(size*0.5)}px;text-shadow:0 1px 2px rgba(0,0,0,.7);">${roundedStar}</span>`
+    : '';
 
   if(reviewedByMe){
     // Diamond shape for anything YOU'VE personally rated — same color scale, different silhouette
     const inner = Math.round(size * 0.72);
     return L.divIcon({
       className:'',
-      html:`<div style="width:${size}px;height:${size}px;display:flex;align-items:center;justify-content:center;">
-              <div style="background:${color};width:${inner}px;height:${inner}px;transform:rotate(45deg);border:2px solid #fff;box-shadow:0 0 3px rgba(0,0,0,.6);"></div>
+      html:`<div style="position:relative;width:${size}px;height:${size}px;">
+              <div style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%) rotate(45deg);background:${color};width:${inner}px;height:${inner}px;border:2px solid #fff;box-shadow:0 0 3px rgba(0,0,0,.6);"></div>
+              <div style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);">${labelHtml}</div>
             </div>`,
       iconSize:[size, size],
       iconAnchor:[size/2, size/2]
@@ -686,7 +776,7 @@ function makeIcon(id){
 
   return L.divIcon({
     className:'',
-    html:`<div style="background:${color};width:${size}px;height:${size}px;border-radius:50%;border:2px solid #fff;box-shadow:0 0 3px rgba(0,0,0,.6);"></div>`,
+    html:`<div style="background:${color};width:${size}px;height:${size}px;border-radius:50%;border:2px solid #fff;box-shadow:0 0 3px rgba(0,0,0,.6);display:flex;align-items:center;justify-content:center;">${labelHtml}</div>`,
     iconSize:[size, size],
     iconAnchor:[size/2, size/2]
   });
@@ -934,6 +1024,7 @@ function addMarker(loc){
   ratingsCache[loc.id] = ratingsCache[loc.id] || emptyAgg();
   myVoteCache[loc.id] = myVoteCache[loc.id] || emptyVote();
   const marker = L.marker([loc.lat, loc.lng], {icon: makeIcon(loc.id)});
+  marker.locId = loc.id; // used by the cluster icon function to compute the cluster's average rating
   markerCluster.addLayer(marker);
   marker.bindPopup(popupHtml(loc, ratingsCache[loc.id], myVoteCache[loc.id]), {
     maxWidth: Math.min(280, window.innerWidth - 40),
@@ -1346,6 +1437,16 @@ seedLocations.forEach(loc => addMarker(loc));
 loadAllRatings();
 loadWeeklyRecap();
 
+// First-time onboarding — shown once per device, dismissible
+(function(){
+  if(localStorage.getItem('onboardingSeen') === '1') return;
+  document.getElementById('onboardingOverlay').classList.add('show');
+})();
+document.getElementById('onboardingClose').addEventListener('click', () => {
+  localStorage.setItem('onboardingSeen', '1');
+  document.getElementById('onboardingOverlay').classList.remove('show');
+});
+
 // If this page was opened via a shared link (?loc=xyz), jump straight to that pin
 (function(){
   const params = new URLSearchParams(window.location.search);
@@ -1353,9 +1454,7 @@ loadWeeklyRecap();
   if(!targetId) return;
   const target = seedLocations.find(l => l.id === targetId);
   if(target && markers[targetId]){
-    markerCluster.zoomToShowLayer(markers[targetId], () => {
-      markers[targetId].openPopup();
-    });
+    zoomToMarker(markers[targetId]);
   }
 })();
 
@@ -1451,12 +1550,26 @@ document.getElementById('openNowToggle').addEventListener('click', () => {
 });
 
 // List view — a plain scrollable browse list, sorted alphabetically, since there's no search anymore
-function buildListView(){
+async function buildListView(){
   const container = document.getElementById('listViewItems');
-  const sorted = [...seedLocations].sort((a, b) => a.n.localeCompare(b.n));
-  container.innerHTML = sorted.map(loc =>
+  container.innerHTML = '<div style="padding:16px;color:#999;">Loading...</div>';
+
+  const pos = await getVerifiedPosition();
+  let sorted;
+  if(pos){
+    sorted = [...seedLocations]
+      .map(loc => ({ loc, dist: milesBetween(pos.lat, pos.lng, loc.lat, loc.lng) }))
+      .sort((a, b) => a.dist - b.dist);
+  } else {
+    sorted = [...seedLocations].sort((a, b) => a.n.localeCompare(b.n)).map(loc => ({ loc, dist: null }));
+  }
+
+  document.getElementById('listViewHeader').querySelector('span').textContent =
+    pos ? 'All Locations — nearest first' : 'All Locations — A to Z';
+
+  container.innerHTML = sorted.map(({loc, dist}) =>
     `<div class="list-item" data-locid="${loc.id}">
-      <div class="list-item-name">${loc.n}</div>
+      <div class="list-item-name">${loc.n}${dist !== null ? ` <span style="color:var(--muted);font-weight:400;font-size:12px;">— ${dist.toFixed(1)} mi</span>` : ''}</div>
       <div class="list-item-addr">${loc.addr}</div>
     </div>`
   ).join('');
@@ -1476,10 +1589,21 @@ document.getElementById('listViewItems').addEventListener('click', (e) => {
   const marker = markers[locId];
   document.getElementById('listViewPanel').classList.remove('show');
   if(marker){
-    markerCluster.zoomToShowLayer(marker, () => {
-      marker.openPopup();
-    });
+    zoomToMarker(marker);
   }
+});
+
+// Surprise Me — picks a random spot, favoring ones nobody's rated yet
+document.getElementById('surpriseMeBtn').addEventListener('click', () => {
+  const unrated = seedLocations.filter(loc => {
+    const agg = ratingsCache[loc.id];
+    return !agg || agg.bathroomCount === 0;
+  });
+  const pool = unrated.length > 0 ? unrated : seedLocations;
+  const pick = pool[Math.floor(Math.random() * pool.length)];
+  const marker = markers[pick.id];
+  if(navigator.vibrate) navigator.vibrate(20);
+  if(marker) zoomToMarker(marker);
 });
 
 
@@ -1532,9 +1656,7 @@ locateBtn.addEventListener('click', () => {
       nearestInfo.innerHTML = `Nearest: <b>${nearest.n}</b><br>${nearestDist.toFixed(1)} mi away — tap to view`;
       nearestInfo.onclick = () => {
         if(markers[nearest.id]){
-          markerCluster.zoomToShowLayer(markers[nearest.id], () => {
-            markers[nearest.id].openPopup();
-          });
+          zoomToMarker(markers[nearest.id]);
         }
       };
     }
