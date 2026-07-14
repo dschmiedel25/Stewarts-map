@@ -60,21 +60,24 @@
   .popup-inner{min-width:230px;font-size:14px;max-height:56vh;overflow-y:auto;}
   .popup-inner h3{margin:0 0 3px;font-size:15.5px;color:#1c1c1e;}
   .popup-inner .addr{color:#666;font-size:11.5px;margin-bottom:6px;}
-  .directions-btn, .directions-btn:visited, .directions-btn:hover{
-    display:inline-block;background:#0d47a1;color:#fff !important;text-decoration:none;
+  /* Reusable button base — used by Directions, Share, Report toggle, and tip/report submit buttons */
+  .btn{
+    display:inline-block;border:none;text-decoration:none;cursor:pointer;
     font-size:13px;font-weight:800;padding:7px 12px;border-radius:6px;
   }
+  .btn-primary{background:#0d47a1;color:#fff !important;}
+  .btn-primary:visited, .btn-primary:hover{color:#fff !important;}
+  .btn-secondary{background:#444;color:#fff;}
+  .btn-danger{background:#b71c1c;color:#fff;}
+  .btn-amber{background:var(--amber);color:#1c1c1e;font-weight:700;flex:none;}
   .popup-actions{display:flex;gap:6px;margin-bottom:6px;flex-wrap:wrap;}
-  .share-btn{
-    background:#444;color:#fff;border:none;font-size:13px;font-weight:800;
-    padding:7px 12px;border-radius:6px;cursor:pointer;
+  .nav-change-btn{padding:7px 9px;flex:none;}
+  .nav-chooser{
+    display:flex;flex-direction:column;gap:6px;margin-bottom:8px;padding:8px;
+    background:#f0f0f0;border-radius:6px;
   }
-  .report-toggle-btn{
-    background:#b71c1c;color:#fff;border:none;font-size:13px;font-weight:800;
-    padding:7px 12px;border-radius:6px;cursor:pointer;
-  }
+  .nav-chooser .nav-choice-btn{width:100%;text-align:center;}
   .report-section{margin-bottom:10px;padding:8px;background:#fdecea;border-radius:6px;}
-  .report-section .tip-input-row{display:flex;gap:8px;margin-bottom:4px;}
   .rating-row{margin:6px 0;}
   .rating-label{font-weight:600;font-size:13px;color:#333;display:block;margin-bottom:3px;}
   .star-quip{font-size:11.5px;font-style:italic;color:#777;margin-top:2px;min-height:13px;}
@@ -85,14 +88,11 @@
   .tips-section{margin-top:8px;padding-top:6px;border-top:1px solid #eee;}
   .tips-list{list-style:none;margin:6px 0 8px;padding:0;max-height:110px;overflow-y:auto;}
   .tips-list li{font-size:13px;color:#444;padding:4px 0;border-bottom:1px dashed #eee;}
-  .tip-input-row{display:flex;gap:8px;}
+  /* Shared by the tips box, report box, and missing-location box */
+  .tip-input-row{display:flex;gap:8px;margin-bottom:4px;}
   .tip-input{
     flex:1;font-size:16px;padding:8px 10px;border:1px solid #ccc;border-radius:6px;
     min-width:0;
-  }
-  .tip-submit{
-    background:var(--amber);color:#1c1c1e;border:none;border-radius:6px;
-    font-size:13px;font-weight:700;padding:7px 12px;cursor:pointer;flex:none;
   }
   #legend{
     position:absolute;top:10px;left:10px;z-index:500;background:var(--panel-bg);
@@ -106,38 +106,21 @@
   #legendBody{margin-top:6px;}
   #legendBody.collapsed{display:none;}
   #legendToggle.collapsed-toggle #legendArrow{transform:rotate(-90deg);display:inline-block;}
-  #searchBox{
-    position:absolute;top:10px;right:10px;z-index:500;
-    display:flex;align-items:center;background:var(--panel-bg);border:1px solid var(--panel-border);
-    border-radius:8px;padding:5px 8px;max-width:56%;
-  }
-  #searchInput{
-    background:transparent;border:none;color:var(--cream);font-size:16px;padding:5px 4px;
-    outline:none;width:100%;
-  }
-  #searchInput::placeholder{color:var(--placeholder);}
-  #searchClear{
-    background:none;border:none;color:var(--placeholder);font-size:18px;cursor:pointer;padding:0 6px;line-height:1;
-  }
-  #searchCount{
-    position:absolute;top:54px;right:10px;z-index:500;font-size:12px;color:var(--muted);
-    background:var(--panel-bg);padding:3px 8px;border-radius:6px;display:none;
-  }
   #openNowToggle{
-    position:absolute;top:88px;right:10px;z-index:500;font-size:12px;font-weight:700;
+    position:absolute;top:10px;right:10px;z-index:500;font-size:12px;font-weight:700;
     background:var(--panel-bg);color:var(--cream);border:1px solid var(--panel-border);
     padding:5px 10px;border-radius:6px;cursor:pointer;
   }
   #openNowToggle.active{background:#2e7d32;border-color:#2e7d32;color:#fff;}
   .dot{display:inline-block;width:10px;height:10px;border-radius:50%;margin-right:5px;}
   #locateBtn{
-    position:absolute;top:130px;right:10px;z-index:500;
+    position:absolute;top:54px;right:10px;z-index:500;
     background:#2196f3;color:#fff;border:none;border-radius:50px;
     padding:11px 14px;font-weight:700;font-size:13.5px;box-shadow:0 3px 10px rgba(0,0,0,.4);
     cursor:pointer;
   }
   #nearestInfo{
-    position:absolute;top:178px;right:10px;z-index:500;
+    position:absolute;top:102px;right:10px;z-index:500;
     background:var(--panel-bg);color:var(--cream);border:1px solid #2196f3;
     border-radius:8px;padding:8px 12px;font-size:13px;max-width:220px;display:none;
     cursor:pointer;line-height:1.4;
@@ -216,11 +199,6 @@
   </div>
 </div>
 
-<div id="searchBox">
-  <input type="text" id="searchInput" placeholder="Search store #, name, or town..." />
-  <button id="searchClear">✕</button>
-</div>
-<div id="searchCount"></div>
 <button id="openNowToggle">🕐 Open now</button>
 
 <div id="map"></div>
@@ -232,7 +210,7 @@
   <div class="rating-label" style="color:#333;">What's missing?</div>
   <div class="tip-input-row">
     <input type="text" id="missingInput" maxlength="120" placeholder="Address or cross streets" />
-    <button class="tip-submit" id="missingSubmit">Send</button>
+    <button class="btn btn-amber tip-submit" id="missingSubmit">Send</button>
   </div>
   <button id="missingUseLocationBtn" type="button">📍 Use my current location instead</button>
   <div class="save-note" id="missingNote"></div>
@@ -836,20 +814,26 @@ async function loadWeeklyRecap(){
 }
 
 function popupHtml(loc, agg, myVote){
-  const dirUrl = `https://www.google.com/maps/dir/?api=1&destination=${loc.lat},${loc.lng}`;
   const shareUrl = `${location.origin}${location.pathname}?loc=${encodeURIComponent(loc.id)}`;
   return `<div class="popup-inner" data-locid="${loc.id}">
     <h3>${loc.n}</h3>
     <div class="addr">${loc.addr}${loc.num ? ' &middot; Shop #' + loc.num : ''}</div>
     <div class="popup-actions">
-      <a href="${dirUrl}" target="_blank" rel="noopener" class="directions-btn">🧭 Directions</a>
-      <button class="share-btn" data-shareurl="${shareUrl}" data-sharename="${loc.n.replace(/"/g,'&quot;')}">🔗 Share</button>
-      <button class="report-toggle-btn" id="report-toggle-${loc.id}">🚩 Report</button>
+      <button class="btn btn-primary directions-btn" id="directions-btn-${loc.id}" data-lat="${loc.lat}" data-lng="${loc.lng}">🧭 Directions</button>
+      <button class="btn btn-secondary nav-change-btn" id="nav-change-${loc.id}" title="Change navigation app">⚙️</button>
+      <button class="btn btn-secondary share-btn" data-shareurl="${shareUrl}" data-sharename="${loc.n.replace(/"/g,'&quot;')}">🔗 Share</button>
+      <button class="btn btn-danger report-toggle-btn" id="report-toggle-${loc.id}">🚩 Report</button>
+    </div>
+    <div class="nav-chooser" id="nav-chooser-${loc.id}" style="display:none;">
+      <div class="rating-label" style="color:#333;">Open directions with:</div>
+      <button class="btn btn-secondary nav-choice-btn" data-app="google">Google Maps</button>
+      <button class="btn btn-secondary nav-choice-btn" data-app="waze">Waze</button>
+      <button class="btn btn-secondary nav-choice-btn" data-app="apple">Apple Maps</button>
     </div>
     <div class="report-section" id="report-section-${loc.id}" style="display:none;">
       <div class="tip-input-row">
         <input type="text" class="tip-input" id="report-input-${loc.id}" maxlength="80" placeholder="What's wrong? e.g. closed, wrong address" />
-        <button class="tip-submit" id="report-submit-${loc.id}">Send report</button>
+        <button class="btn btn-amber tip-submit" id="report-submit-${loc.id}">Send report</button>
       </div>
       <div class="save-note" id="report-note-${loc.id}"></div>
     </div>
@@ -869,7 +853,7 @@ function popupHtml(loc, agg, myVote){
       <ul class="tips-list" id="tips-list-${loc.id}"><li style="color:#999;">Loading…</li></ul>
       <div class="tip-input-row">
         <input type="text" class="tip-input" id="tip-input-${loc.id}" maxlength="${MAX_TIP_LENGTH}" placeholder="e.g. need a key, buzzer required" />
-        <button class="tip-submit" id="tip-submit-${loc.id}">Add</button>
+        <button class="btn btn-amber tip-submit" id="tip-submit-${loc.id}">Add</button>
       </div>
     </div>
   </div>`;
@@ -893,10 +877,58 @@ function addMarker(loc){
   marker.on('popupopen', () => {
     attachStarHandlers(loc);
     attachTipHandlers(loc);
+    attachDirectionsHandler(loc);
     attachShareHandler(loc);
     attachReportHandler(loc);
   });
   markers[loc.id] = marker;
+}
+
+// Directions — remembers the user's preferred nav app after they pick once
+function buildNavUrl(app, lat, lng){
+  if(app === 'waze') return `https://www.waze.com/ul?ll=${lat},${lng}&navigate=yes`;
+  if(app === 'apple') return `https://maps.apple.com/?daddr=${lat},${lng}`;
+  return `https://www.google.com/maps/dir/?api=1&destination=${lat},${lng}`;
+}
+
+function attachDirectionsHandler(loc){
+  const btnOrig = document.getElementById('directions-btn-' + loc.id);
+  const changeBtnOrig = document.getElementById('nav-change-' + loc.id);
+  const chooser = document.getElementById('nav-chooser-' + loc.id);
+  if(!btnOrig || !chooser || !changeBtnOrig) return;
+
+  const btn = btnOrig.cloneNode(true);
+  btnOrig.parentNode.replaceChild(btn, btnOrig);
+  const changeBtn = changeBtnOrig.cloneNode(true);
+  changeBtnOrig.parentNode.replaceChild(changeBtn, changeBtnOrig);
+
+  const openWith = (app) => {
+    window.open(buildNavUrl(app, btn.dataset.lat, btn.dataset.lng), '_blank', 'noopener');
+  };
+
+  btn.addEventListener('click', () => {
+    const pref = localStorage.getItem('preferredNavApp');
+    if(pref){
+      openWith(pref);
+    } else {
+      chooser.style.display = chooser.style.display === 'none' ? 'flex' : 'none';
+    }
+  });
+
+  changeBtn.addEventListener('click', () => {
+    chooser.style.display = chooser.style.display === 'none' ? 'flex' : 'none';
+  });
+
+  chooser.querySelectorAll('.nav-choice-btn').forEach(choiceBtnOrig => {
+    const choiceBtn = choiceBtnOrig.cloneNode(true);
+    choiceBtnOrig.parentNode.replaceChild(choiceBtn, choiceBtnOrig);
+    choiceBtn.addEventListener('click', () => {
+      const app = choiceBtn.dataset.app;
+      localStorage.setItem('preferredNavApp', app);
+      chooser.style.display = 'none';
+      openWith(app);
+    });
+  });
 }
 
 function attachShareHandler(loc){
@@ -1267,17 +1299,6 @@ map.on('zoomend', () => {
   });
 });
 
-// Search / filter by store number, name, address, or town
-function locMatches(loc, q){
-  if(!q) return true;
-  const hay = [
-    loc.num || '',
-    loc.n || '',
-    loc.addr || ''
-  ].join(' ').toLowerCase();
-  return hay.includes(q);
-}
-
 // Open-now calculation — loc.hrs is either "24" (24hr) or "HHMM-HHMM" in 24hr time.
 // Locations with no .hrs field are "unknown" and are never hidden by the open-now filter.
 function isLocationOpenNow(loc){
@@ -1301,43 +1322,17 @@ function isLocationOpenNow(loc){
 let showOnlyOpenNow = false;
 
 function applyFilters(){
-  const q = document.getElementById('searchInput').value.trim().toLowerCase();
-  const countEl = document.getElementById('searchCount');
-  let matchCount = 0;
-  let firstMatch = null;
-
   seedLocations.forEach(loc => {
     const m = markers[loc.id];
     if(!m) return;
-    const textOk = locMatches(loc, q);
     const openOk = !showOnlyOpenNow || isLocationOpenNow(loc) !== false; // null (unknown) counts as OK
-    const visible = textOk && openOk;
-    if(visible){
-      matchCount++;
-      if(!firstMatch) firstMatch = loc;
+    if(openOk){
       if(!map.hasLayer(m)) m.addTo(map);
     } else {
       if(map.hasLayer(m)) map.removeLayer(m);
     }
   });
-
-  if(!q && !showOnlyOpenNow){
-    countEl.style.display = 'none';
-    return;
-  }
-  countEl.style.display = 'block';
-  countEl.textContent = matchCount === 0 ? 'No matches' : `${matchCount} match${matchCount===1?'':'es'}`;
-  if(matchCount === 1 && firstMatch){
-    map.setView([firstMatch.lat, firstMatch.lng], 15);
-    markers[firstMatch.id].openPopup();
-  }
 }
-
-document.getElementById('searchInput').addEventListener('input', applyFilters);
-document.getElementById('searchClear').addEventListener('click', () => {
-  document.getElementById('searchInput').value = '';
-  applyFilters();
-});
 
 document.getElementById('openNowToggle').addEventListener('click', () => {
   showOnlyOpenNow = !showOnlyOpenNow;
