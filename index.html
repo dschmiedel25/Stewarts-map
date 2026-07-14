@@ -6,6 +6,9 @@
 <title>Stewart's Bathroom Report</title>
 <link rel="icon" href="icon-512.png">
 <link rel="apple-touch-icon" href="apple-touch-icon.png">
+<link rel="manifest" href="manifest.webmanifest">
+<meta name="theme-color" content="#f5a623">
+<meta name="mobile-web-app-capable" content="yes">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css" />
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js" crossorigin="anonymous"></script>
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet.markercluster/1.5.3/MarkerCluster.css" />
@@ -675,6 +678,16 @@ function zoomToMarker(marker){
   map.setView(marker.getLatLng(), 16, { animate: false });
   map.panBy([0, -110], { animate: false }); // nudge marker down, clear of the button stack
   marker.openPopup();
+}
+
+// Register the service worker — required by Android/Chrome for "Add to Home Screen" to
+// actually offer full app-like installation (not just a bookmark shortcut)
+if('serviceWorker' in navigator){
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('./sw.js').catch((e) => {
+      console.error('Service worker registration failed (site still works fine without it):', e);
+    });
+  });
 }
 
 // Safety net: recalculate map size whenever the viewport or layout might have changed
