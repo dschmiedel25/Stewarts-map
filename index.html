@@ -87,23 +87,35 @@
 </div>
 
 <div id="onboardingOverlay">
-  <div id="onboardingCard">
-    <h2>🚽 Welcome!</h2>
-    <p>Quick tour:</p>
-    <ul>
-      <li>📍 <b>Tap any pin</b> to rate the store & bathroom, leave a tip, or get directions.</li>
-      <li>✅ Just want to log a visit without rating anything? Tap <b>"I've been here"</b> instead.</li>
-      <li>🕐 Hours shown are <b>live</b> — the map knows if a spot is open right now.</li>
-      <li>🧭 First time using Directions, you'll pick Google Maps, Waze, or Apple Maps — it's remembered after that.</li>
-      <li>🔗 <b>Share</b> a pin, or 🚩 <b>Report</b> a problem (wrong info, permanently closed, etc.) — right in each pin's popup.</li>
-      <li>📋 Use <b>List</b> to browse every location, or <b>Bathroom Now</b> to find the closest open bathroom by driving distance.</li>
-      <li>👤 <b>Log in</b> (just a username & password, no email) to make your name and ratings follow you across devices, and to automatically appear on the <b>Leaderboard</b> under your username. <b>No password recovery exists</b> — if you forget it, that username is gone for good.</li>
-    </ul>
-    <p style="font-size:11.5px;color:#888;border-top:1px solid #ddd;padding-top:10px;margin-bottom:6px;">
-      BathroomReport is an independent, community-created project and is not affiliated with or endorsed by Stewart's Shops or any other business listed. Store hours shown may vary or be out of date — always call ahead if it matters.
-    </p>
-    <p style="font-size:11px;color:#aaa;margin-bottom:14px;">Location data updated: July 14, 2026</p>
-<button id="onboardingClose" class="btn btn-amber" style="width:100%;">Got it!</button>
+  <div id="onboardingCard" role="dialog" aria-modal="true" aria-labelledby="onboardingTitle">
+    <div id="onboardingScroll">
+      <h2 id="onboardingTitle">🚽 Welcome to BathroomReport</h2>
+      <p class="onboardingTagline">Find a bathroom, check its rating, and help the next traveler.</p>
+
+      <div class="onboardingGrid" aria-label="Quick tour">
+        <div class="onboardingTip"><span>📍</span><div><b>Rate a stop</b><small>Tap a pin to review the store and bathroom.</small></div></div>
+        <div class="onboardingTip"><span>🚽</span><div><b>Bathroom Now</b><small>Find the closest open restroom by driving distance.</small></div></div>
+        <div class="onboardingTip"><span>📋</span><div><b>Browse the list</b><small>See every location and sort the results.</small></div></div>
+        <div class="onboardingTip"><span>🧭</span><div><b>Get directions</b><small>Use Apple Maps, Google Maps, or Waze.</small></div></div>
+        <div class="onboardingTip"><span>✅</span><div><b>Log a visit</b><small>Use “I've been here” without leaving a rating.</small></div></div>
+        <div class="onboardingTip"><span>👤</span><div><b>Optional account</b><small>Keep ratings across devices and join the leaderboard.</small></div></div>
+      </div>
+
+      <details id="onboardingMore">
+        <summary>More tips & important info</summary>
+        <div class="onboardingMoreBody">
+          <p>Hours are shown live when available, but may occasionally be outdated.</p>
+          <p>You can share a pin or report wrong information from its popup.</p>
+          <p>Accounts use a username and password with no email. There is currently no password recovery.</p>
+          <p class="onboardingDisclaimer">BathroomReport is an independent, community-created project and is not affiliated with or endorsed by Stewart's Shops or any other business listed.</p>
+          <p class="onboardingUpdated">Location data updated: July 14, 2026</p>
+        </div>
+      </details>
+    </div>
+
+    <div id="onboardingActions">
+      <button id="onboardingClose" class="btn btn-amber">Got it!</button>
+    </div>
   </div>
 </div>
 
