@@ -11,9 +11,6 @@
 <meta name="mobile-web-app-capable" content="yes">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css" />
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js" crossorigin="anonymous"></script>
-<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet.markercluster/1.5.3/MarkerCluster.css" />
-<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet.markercluster/1.5.3/MarkerCluster.Default.css" />
-<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet.markercluster/1.5.3/leaflet.markercluster.js" crossorigin="anonymous"></script>
 <script type="module">
   import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
   import {
@@ -75,11 +72,42 @@
   body{display:flex;flex-direction:column;}
   #header{
     flex:none;
-    padding:14px 16px 10px;background:linear-gradient(180deg,var(--header-grad-top),var(--charcoal));
-    border-bottom:2px solid var(--amber);
+    padding:14px 16px;background:linear-gradient(135deg,var(--header-grad-top),var(--charcoal));
+    border-bottom:1px solid var(--amber);
+    box-shadow:0 2px 12px rgba(0,0,0,.25);
+    position:relative;z-index:1;
   }
-  #header h1{margin:0;font-size:19px;letter-spacing:.3px;}
-  #header p{margin:5px 0 0;font-size:13.5px;color:var(--muted);line-height:1.4;}
+  #headerIcon{
+    flex:none;width:38px;height:38px;border-radius:11px;
+    background:linear-gradient(135deg,var(--amber),#c9791a);
+    display:flex;align-items:center;justify-content:center;font-size:20px;
+    box-shadow:0 2px 6px rgba(0,0,0,.3);
+  }
+  #header h1{margin:0;font-size:17px;font-weight:800;letter-spacing:.2px;line-height:1.2;}
+  #headerSubtitle{
+    margin:2px 0 0;font-size:12.5px;color:var(--muted);line-height:1.35;
+  }
+  #infoBtn{background:none;border:none;color:var(--muted);font-size:12px;cursor:pointer;vertical-align:middle;padding:0 0 0 4px;}
+  #themeToggle{
+    flex:none;background:var(--panel-bg);border:1px solid var(--panel-border);color:var(--cream);
+    font-size:14px;padding:7px 10px;border-radius:10px;cursor:pointer;
+  }
+  #cashAppBtn{
+    flex:none;background:linear-gradient(135deg,#00C244,#00a339);color:#fff;text-decoration:none;
+    font-weight:700;font-size:12px;padding:8px 11px;border-radius:10px;white-space:nowrap;
+    box-shadow:0 2px 6px rgba(0,194,68,.3);
+  }
+  #statPillRow{
+    display:flex;gap:6px;margin-top:10px;overflow-x:auto;scrollbar-width:none;
+    -webkit-overflow-scrolling:touch;
+  }
+  #statPillRow::-webkit-scrollbar{display:none;}
+  .stat-pill{
+    flex:none;font-size:12px;font-weight:600;color:var(--cream);white-space:nowrap;
+    background:rgba(245,166,35,.12);border:1px solid rgba(245,166,35,.35);
+    padding:6px 11px;border-radius:20px;
+  }
+  #mostRecentBadge{cursor:pointer;}
   #mapWrap{position:relative;flex:1 1 auto;min-height:0;}
   #map{position:absolute;inset:0;}
   #map.dark-map-tiles .leaflet-tile-pane{
@@ -111,6 +139,8 @@
   }
   .nav-chooser .nav-choice-btn{width:100%;text-align:center;}
   .report-section{margin-bottom:10px;padding:8px;background:var(--popup-report-bg);border-radius:6px;}
+  .checkin-row{display:flex;align-items:center;gap:8px;margin-bottom:10px;flex-wrap:wrap;}
+  .checkin-count{font-size:12px;color:var(--popup-muted);}
   .rating-row{margin:6px 0;}
   .rating-label{font-weight:600;font-size:13px;color:var(--popup-text);display:block;margin-bottom:3px;}
   .star-quip{font-size:11.5px;font-style:italic;color:var(--popup-muted);margin-top:2px;min-height:13px;}
@@ -264,19 +294,26 @@
 </div>
 
 <div id="header">
-  <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;">
-    <h1 style="margin:0;">🚽 Stewart's Bathroom Report</h1>
+  <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;">
+    <div style="display:flex;align-items:center;gap:10px;min-width:0;">
+      <div id="headerIcon">🚽</div>
+      <div style="min-width:0;">
+        <h1>Stewart's Bathroom Report</h1>
+        <p id="headerSubtitle">Tap a pin to rate the store &amp; bathroom
+          <button id="infoBtn" title="About this app">ℹ️</button>
+        </p>
+      </div>
+    </div>
     <div style="display:flex;gap:6px;flex:none;">
-      <button id="themeToggle" style="flex:none;background:var(--panel-bg);border:1px solid var(--panel-border);color:var(--cream);font-size:14px;padding:6px 9px;border-radius:8px;cursor:pointer;">🌙</button>
-      <a href="https://cash.app/$BathroomReport" target="_blank" rel="noopener" style="flex:none;background:#00C244;color:#fff;text-decoration:none;font-weight:700;font-size:12.5px;padding:7px 10px;border-radius:8px;white-space:nowrap;">🍔 Buy me lunch</a>
+      <button id="themeToggle">🌙</button>
+      <a href="https://cash.app/$BathroomReport" target="_blank" rel="noopener" id="cashAppBtn">🍔 Buy me lunch</a>
     </div>
   </div>
-  <p>Tap a pin to rate the store &amp; bathroom.
-    <button id="infoBtn" title="About this app" style="background:none;border:none;color:var(--muted);font-size:13px;cursor:pointer;vertical-align:middle;padding:0 0 0 4px;">ℹ️</button>
-  </p>
-  <p id="achievementBadge" style="margin-top:6px;font-weight:600;color:var(--amber);">🏆 Rate a spot to start earning badges</p>
-  <p id="weeklyRecap" style="margin-top:4px;font-size:14px;color:var(--muted);"></p>
-  <p id="mostRecentBadge" style="margin-top:4px;font-size:14px;color:var(--muted);cursor:pointer;"></p>
+  <div id="statPillRow">
+    <span class="stat-pill" id="myProgressBadge"></span>
+    <span class="stat-pill" id="weeklyRecap" style="display:none;"></span>
+    <span class="stat-pill" id="mostRecentBadge" style="display:none;"></span>
+  </div>
 </div>
 
 <div id="mapWrap">
@@ -316,6 +353,7 @@
     <p>Quick tour:</p>
     <ul>
       <li>📍 <b>Tap any pin</b> to rate the store & bathroom, leave a tip, or get directions.</li>
+      <li>✅ Just want to log a visit without rating anything? Tap <b>"I've been here"</b> instead.</li>
       <li>🕐 Hours shown are <b>live</b> — the map knows if a spot is open right now.</li>
       <li>🧭 First time using Directions, you'll pick Google Maps, Waze, or Apple Maps — it's remembered after that.</li>
       <li>🔗 <b>Share</b> a pin, or 🚩 <b>Report</b> a problem (wrong info, permanently closed, etc.) — right in each pin's popup.</li>
@@ -580,7 +618,7 @@ const seedLocations = [
 {"n":"NY-28, North Creek","lat":43.683414,"lng":-73.977737,"addr":"3259 NY-28, North Creek, NY 12853","id":"northcreek-ny28","hrs":"0500-2400"},
 {"n":"Mohawk St, Herkimer","lat":43.022665,"lng":-74.989033,"addr":"260 Mohawk St, Herkimer, NY 13350","id":"herkimer-mohawkst","hrs":"0400-2400"},
 {"n":"Indian Fields Rd, Feura Bush","lat":42.579534,"lng":-73.875185,"addr":"1360 Indian Fields Rd, Feura Bush, NY 12067","id":"feurabush-indianfields","hrs":"0400-2400"},
-{"n":"Lake St, Rouses Point","lat":44.982999,"lng":-73.363222,"addr":"222 Lake Street, Rouses Point, NY 12979","id":"rousespoint-lakest"},
+{"n":"Lake St, Rouses Point","lat":44.982999,"lng":-73.363222,"addr":"222 Lake Street, Rouses Point, NY 12979","id":"rousespoint-lakest","hrs":"0500-2300"},
 {"n":"NY-8, Bridgewater","lat":42.879655,"lng":-75.250485,"addr":"336 NY-8, Bridgewater, NY 13313","id":"bridgewater-ny8","hrs":"0400-2400"},
 {"n":"Poultney St, Whitehall","lat":43.550180,"lng":-73.397754,"addr":"60 Poultney St, Whitehall, NY 12887","id":"whitehall-poultneyst","hrs":"0430-2300"},
 {"n":"Culver Ave, Utica","lat":43.081985,"lng":-75.205109,"addr":"1210 Culver Ave, Utica, NY 13501","id":"utica-culverave","num":"450","hrs":"0400-2330"},
@@ -621,7 +659,7 @@ const seedLocations = [
 {"n":"Church St, Chatham","lat":42.356773,"lng":-73.603140,"addr":"30 Church St, Chatham, NY 12037","id":"chatham-churchst","hrs":"0430-2300"},
 {"n":"US-9, Valatie","lat":42.425892,"lng":-73.687950,"addr":"2931 US-9, Valatie, NY 12184","id":"valatie-us9","hrs":"0430-2300"},
 {"n":"Chatham St, Kinderhook","lat":42.401994,"lng":-73.695145,"addr":"61 Chatham St, Kinderhook, NY 12106","id":"kinderhook-chathamst","hrs":"0500-2300"},
-{"n":"Main St, Philmont","lat":42.249378,"lng":-73.649486,"addr":"116 Main St, Philmont, NY 12565","id":"philmont-mainst"},
+{"n":"Main St, Philmont","lat":42.249378,"lng":-73.649486,"addr":"116 Main St, Philmont, NY 12565","id":"philmont-mainst","hrs":"0500-2300"},
 {"n":"S Broadway, Red Hook","lat":41.980326,"lng":-73.883338,"addr":"7243 S Broadway, Red Hook, NY 12571","id":"redhook-sbroadway","hrs":"0430-2400"},
 {"n":"N Broadway, Red Hook","lat":41.996931,"lng":-73.874126,"addr":"7558 N Broadway, Red Hook, NY 12571","id":"redhook-nbroadway","hrs":"0500-2300"},
 {"n":"NY-9G, Hyde Park","lat":41.788990,"lng":-73.915166,"addr":"1115 NY-9G, Hyde Park, NY 12538","id":"hydepark-ny9g","hrs":"0430-2300"},
@@ -658,15 +696,16 @@ const seedLocations = [
 {"n":"E Bridge St, Oswego","lat":43.459088,"lng":-76.501686,"addr":"120 E Bridge St, Oswego, NY 13126","id":"oswego-ebridgest","hrs":"0500-2400"},
 {"n":"W Utica St, Oswego","lat":43.451888,"lng":-76.512902,"addr":"51 W Utica St, Oswego, NY 13126","id":"oswego-wuticast","hrs":"0500-2400"},
 {"n":"US-11, Adams","lat":43.820675,"lng":-76.022405,"addr":"10546 US-11, Adams, NY 13605","id":"adams-us11","hrs":"0400-2330"},
-{"n":"Harden Blvd, Camden","lat":43.330787,"lng":-75.747461,"addr":"3 Harden Blvd, Camden, NY 13316","id":"camden-hardenblvd"},
+{"n":"Harden Blvd, Camden","lat":43.330787,"lng":-75.747461,"addr":"3 Harden Blvd, Camden, NY 13316","id":"camden-hardenblvd","hrs":"0430-2400"},
 {"n":"Erie Blvd W, Rome","lat":43.214051,"lng":-75.467463,"addr":"506 Erie Blvd W, Rome, NY 13440","id":"rome-erieblvdw","hrs":"0430-2400"},
 {"n":"Floyd Ave, Rome","lat":43.222909,"lng":-75.420290,"addr":"1373 Floyd Ave, Rome, NY 13440","id":"rome-floydave","hrs":"0400-0100"},
 {"n":"Turin Rd, Rome","lat":43.303095,"lng":-75.472770,"addr":"9128 Turin Rd, Rome, NY 13440","id":"rome-turinrd","hrs":"0430-2400"},
 {"n":"Mexico, NY","lat":43.459266,"lng":-76.232011,"addr":"Mexico, NY 13114","id":"mexico-ny"},
-{"n":"Brown St, Dexter","lat":44.007481,"lng":-76.044237,"addr":"308 Brown St, Dexter, NY 13634","id":"dexter-brownst"},
+{"n":"Brown St, Dexter","lat":44.007481,"lng":-76.044237,"addr":"308 Brown St, Dexter, NY 13634","id":"dexter-brownst","hrs":"0430-2400"},
 {"n":"S Main St, Northville","lat":43.225616,"lng":-74.172217,"addr":"111 S Main St, Northville, NY 12134","id":"northville-smainst","hrs":"0400-2400"},
 {"n":"Columbia Turnpike, Castleton-On-Hudson","lat":42.551193,"lng":-73.672327,"addr":"1811 Columbia Turnpike, Castleton-On-Hudson, NY 12033","id":"castleton-columbia1811","hrs":"0430-2400"},
-{"n":"Columbia Turnpike, Castleton-On-Hudson (S)","lat":42.577551,"lng":-73.690693,"addr":"1540 Columbia Turnpike, Castleton-On-Hudson, NY 12033","id":"castleton-columbia1540","hrs":"0430-2300"}
+{"n":"Columbia Turnpike, Castleton-On-Hudson (S)","lat":42.577551,"lng":-73.690693,"addr":"1540 Columbia Turnpike, Castleton-On-Hudson, NY 12033","id":"castleton-columbia1540","hrs":"0430-2300"},
+{"n":"US-2, Alburgh VT","lat":44.999304,"lng":-73.330124,"addr":"3030 US-2, Alburgh, VT 05440","id":"alburghvt-us2","hrs":"0500-2230"}
 ];
 
 // Theme: defaults to the phone's system light/dark setting, but a manual toggle overrides it
@@ -706,65 +745,15 @@ document.getElementById('themeToggle').addEventListener('click', () => {
 const map = L.map('map', { zoomControl: false, maxZoom: 19 }).setView([42.75, -73.80], 12);
 L.control.zoom({ position: 'bottomright' }).addTo(map);
 
-// Cluster group — groups nearby pins into a single bubble at wide zoom levels, since the
-// map now spans a huge area (Syracuse to Vermont to the Hudson Valley)
-let markerCluster;
-try{
-  markerCluster = L.markerClusterGroup({
-    maxClusterRadius: 50,
-    spiderfyOnMaxZoom: true,
-    showCoverageOnHover: false,
-    disableClusteringAtZoom: 15,
-    iconCreateFunction: function(cluster){
-      // Color the cluster bubble the same way individual pins are colored — by average
-      // bathroom rating of the locations inside it — instead of the plugin's default
-      // size-based traffic-light colors.
-      const childMarkers = cluster.getAllChildMarkers();
-      let sumOfAverages = 0, ratedCount = 0;
-      childMarkers.forEach(m => {
-        const agg = ratingsCache[m.locId];
-        if(agg && agg.bathroomCount > 0){
-          sumOfAverages += (agg.bathroomSum / agg.bathroomCount);
-          ratedCount++;
-        }
-      });
-      const color = ratedCount > 0
-        ? bathroomColor({ bathroomSum: sumOfAverages, bathroomCount: ratedCount })
-        : '#8a8a8a';
-      const childCount = cluster.getChildCount();
-      return L.divIcon({
-        html: `<div style="background:${color};width:40px;height:40px;border-radius:50%;display:flex;align-items:center;justify-content:center;border:3px solid #fff;box-shadow:0 0 4px rgba(0,0,0,.6);color:#fff;font-weight:800;font-size:14px;">${childCount}</div>`,
-        className: '',
-        iconSize: [40, 40]
-      });
-    }
-  });
-  map.addLayer(markerCluster);
-}catch(e){
-  // The clustering plugin failed to load or is incompatible (CDN hiccup, blocker, version
-  // mismatch, etc.) — fall back to a plain group so the map and pins still work, just
-  // without the cluster-bubble visual.
-  console.error('Marker clustering unavailable, falling back to a plain layer group:', e);
-  markerCluster = L.layerGroup();
-  map.addLayer(markerCluster);
-}
-
-// Safely jump to and open a marker's popup, whether clustering is active or not
-// (plain L.layerGroup fallback doesn't have zoomToShowLayer)
-// Tracks a marker that's been temporarily pulled out of the cluster group so its popup
-// can be reliably opened — restored back into the cluster once its popup closes.
-let pulledOutMarker = null;
+// Plain marker layer group — no clustering. We tried Leaflet.markercluster for a while, but
+// it turned out to be the common thread behind several distinct Android bugs (a maxZoom
+// error, a zoomToShowLayer race condition, and possibly the popup-closes-immediately issue),
+// so it's been removed entirely in favor of reliability. All markers just render directly.
+const markerCluster = L.layerGroup();
+map.addLayer(markerCluster);
 
 function zoomToMarker(marker){
   if(!marker) return;
-  // Bypass the clustering plugin entirely for this interaction — pulling the marker out
-  // of the cluster group and adding it directly to the map means there's no dependency on
-  // the plugin's internal (and apparently unreliable on some Android devices) un-clustering
-  // timing. This has been a persistent source of "map jumps but no popup" bugs.
-  if(markerCluster.hasLayer(marker)) markerCluster.removeLayer(marker);
-  if(!map.hasLayer(marker)) marker.addTo(map);
-  pulledOutMarker = marker;
-
   map.setView(marker.getLatLng(), 16, { animate: false });
   map.panBy([0, -110], { animate: false }); // nudge marker down, clear of the button stack
   marker.openPopup();
@@ -804,13 +793,6 @@ map.on('popupclose', () => {
   document.getElementById('leaderboardToggle').style.display = '';
   const wasCollapsed = localStorage.getItem('legendCollapsed') === '1';
   if(!wasCollapsed) document.getElementById('legendBody').classList.remove('collapsed');
-
-  // If a marker was pulled out of the cluster group to reliably show its popup, put it back
-  if(pulledOutMarker){
-    if(map.hasLayer(pulledOutMarker)) map.removeLayer(pulledOutMarker);
-    markerCluster.addLayer(pulledOutMarker);
-    pulledOutMarker = null;
-  }
 });
 
 // Two tile sources now: satellite imagery for light mode, street map (with a CSS invert
@@ -932,7 +914,7 @@ function makeIcon(id){
   });
 }
 
-function emptyAgg(){ return {storeSum:0, storeCount:0, bathroomSum:0, bathroomCount:0}; }
+function emptyAgg(){ return {storeSum:0, storeCount:0, bathroomSum:0, bathroomCount:0, checkinCount:0}; }
 function emptyVote(){ return {store:0, bathroom:0}; }
 function avgStr(sum, count){ return count > 0 ? (sum/count).toFixed(1) : '—'; }
 
@@ -1171,6 +1153,42 @@ async function bumpAggregate(id, sumKey, sumDelta, countKey, countDelta){
   }
 }
 
+// Check-ins — a lightweight "I've been here" that doesn't require a star rating. Counted
+// once per person per location (re-checking in later just updates your timestamp, doesn't
+// inflate the count).
+async function hasCheckedIn(locId){
+  try{
+    const {db, doc, getDoc} = await fb();
+    const snap = await getDoc(doc(db, 'checkins', locId + '_' + getEffectiveId()));
+    return snap.exists();
+  }catch(e){
+    return false;
+  }
+}
+
+async function checkIn(loc){
+  const verification = await verifyNearby(loc);
+  if(!verification.ok){
+    return { ok: false, reason: verification.reason === 'no-location'
+      ? "📍 Enable location to check in here."
+      : `📍 You need to be at this Stewart's to check in (you're ${verification.distance.toFixed(1)} mi away).` };
+  }
+  try{
+    const {db, doc, setDoc, increment} = await fb();
+    const myId = getEffectiveId();
+    const checkinRef = doc(db, 'checkins', loc.id + '_' + myId);
+    const alreadyIn = await hasCheckedIn(loc.id);
+    await setDoc(checkinRef, { locId: loc.id, clientId: myId, ts: Date.now() }, { merge: true });
+    if(!alreadyIn){
+      await setDoc(doc(db, 'aggregates', loc.id), { checkinCount: increment(1) }, { merge: true });
+    }
+    return { ok: true, alreadyIn };
+  }catch(e){
+    console.error('checkIn failed', e);
+    return { ok: false, reason: 'Something went wrong — try again.' };
+  }
+}
+
 // Personal record of your own vote (per-account if logged in, per-device otherwise)
 async function loadMyVote(id){
   try{
@@ -1246,9 +1264,10 @@ async function loadWeeklyRecap(){
     const el = document.getElementById('weeklyRecap');
     if(el){
       if(ratings === 0 && tips === 0){
-        el.textContent = '';
+        el.style.display = 'none';
       } else {
         el.textContent = `📈 This week: ${ratings} new rating${ratings===1?'':'s'}, ${tips} new tip${tips===1?'':'s'}`;
+        el.style.display = 'inline-block';
       }
     }
   }catch(e){
@@ -1296,6 +1315,11 @@ function popupHtml(loc, agg, myVote){
       </div>
       <div class="save-note" id="report-note-${loc.id}"></div>
     </div>
+    <div class="checkin-row">
+      <button class="btn btn-secondary checkin-btn" id="checkin-btn-${loc.id}">✅ I've been here</button>
+      <span class="checkin-count">${agg.checkinCount || 0} check-in${(agg.checkinCount || 0) === 1 ? '' : 's'}</span>
+      <div class="save-note" id="checkin-note-${loc.id}"></div>
+    </div>
     <div class="rating-row">
       <span class="rating-label">Store — avg ${avgStr(agg.storeSum, agg.storeCount)}★ (${agg.storeCount} ${agg.storeCount===1?'rating':'ratings'})</span>
       ${starsHtml(loc.id,'store',myVote.store)}
@@ -1341,6 +1365,7 @@ function addMarker(loc){
     attachDirectionsHandler(loc);
     attachShareHandler(loc);
     attachReportHandler(loc);
+    attachCheckinHandler(loc);
   });
   markers[loc.id] = marker;
 }
@@ -1440,6 +1465,44 @@ async function logMissingLocation(description, coords){
   }
 }
 
+function attachCheckinHandler(loc){
+  const btnOrig = document.getElementById('checkin-btn-' + loc.id);
+  const note = document.getElementById('checkin-note-' + loc.id);
+  if(!btnOrig) return;
+  const btn = btnOrig.cloneNode(true);
+  btnOrig.parentNode.replaceChild(btn, btnOrig);
+
+  btn.addEventListener('click', async () => {
+    btn.disabled = true;
+    btn.textContent = 'Checking in...';
+    if(note){ note.style.color = ''; note.textContent = ''; }
+    const result = await checkIn(loc);
+    if(result.ok){
+      if(navigator.vibrate) navigator.vibrate(15);
+      btn.textContent = '✅ Checked in!';
+      if(note){
+        note.style.color = '#2f6b3c';
+        note.textContent = result.alreadyIn ? "Welcome back — you'd already checked in here before." : "You're on the map!";
+      }
+      // Refresh the count shown next to the button
+      const agg = ratingsCache[loc.id];
+      if(agg){
+        agg.checkinCount = (agg.checkinCount || 0) + (result.alreadyIn ? 0 : 1);
+        const countEl = document.querySelector(`.popup-inner[data-locid="${loc.id}"] .checkin-count`);
+        if(countEl) countEl.textContent = `${agg.checkinCount} check-in${agg.checkinCount === 1 ? '' : 's'}`;
+      }
+      setTimeout(() => {
+        btn.disabled = false;
+        btn.textContent = "✅ I've been here";
+      }, 2000);
+    } else {
+      btn.disabled = false;
+      btn.textContent = "✅ I've been here";
+      if(note){ note.style.color = '#c62828'; note.textContent = result.reason; }
+    }
+  });
+}
+
 function attachReportHandler(loc){
   const toggleBtn = document.getElementById('report-toggle-' + loc.id);
   const section = document.getElementById('report-section-' + loc.id);
@@ -1496,9 +1559,25 @@ async function loadAllRatings(){
       if(marker.isPopupOpen()) attachStarHandlers(loc);
     }
   }));
-  updateAchievementBadge();
   updateMostRecentBadge();
+  updateMyProgressBadge();
   map.invalidateSize(); // header height just changed (badges filled in) — tell Leaflet to recalculate
+}
+
+// Simple personal progress — how many of the total locations you've rated, no tiers/gamification
+function updateMyProgressBadge(){
+  const el = document.getElementById('myProgressBadge');
+  if(!el) return;
+  let count = 0;
+  for(const id in myVoteCache){
+    const v = myVoteCache[id];
+    if(v && (v.store > 0 || v.bathroom > 0)) count++;
+  }
+  const total = seedLocations.length;
+  const remaining = total - count;
+  el.textContent = count === 0
+    ? `📍 0 of ${total} stops rated — ${total} to go`
+    : `📍 ${count} of ${total} stops rated — ${remaining} to go`;
 }
 
 // Highlights whichever location was rated most recently, anywhere on the map
@@ -1517,54 +1596,12 @@ function updateMostRecentBadge(){
   if(!mostRecentLoc){
     el.textContent = '';
     el.onclick = null;
+    el.style.display = 'none';
     return;
   }
   el.textContent = `🕐 Most recently rated: ${mostRecentLoc.n} — ${relativeTimeFromNow(mostRecentTs)}`;
+  el.style.display = 'inline-block';
   el.onclick = () => zoomToMarker(markers[mostRecentLoc.id]);
-}
-
-// Achievements — purely local/cosmetic, counts locations YOU'VE personally rated
-const ACHIEVEMENT_TIERS = [
-  {min:1,  label:"First Flush"},
-  {min:5,  label:"Regular"},
-  {min:10, label:"Porcelain Pro"},
-  {min:25, label:"Bathroom Connoisseur"},
-  {min:50, label:"Living Legend"},
-  {min:100,label:"Stewart's Royalty"}
-];
-function countMyReviewedLocations(){
-  let count = 0;
-  for(const id in myVoteCache){
-    const v = myVoteCache[id];
-    if(v && (v.store > 0 || v.bathroom > 0)) count++;
-  }
-  return count;
-}
-function currentTier(count){
-  let tier = null;
-  for(const t of ACHIEVEMENT_TIERS){
-    if(count >= t.min) tier = t;
-  }
-  return tier;
-}
-
-let lastKnownTierMin = 0;
-function updateAchievementBadge(){
-  const badge = document.getElementById('achievementBadge');
-  if(!badge) return;
-  const count = countMyReviewedLocations();
-  const tier = currentTier(count);
-  if(!tier){
-    badge.textContent = `🏆 Rate a spot to start earning badges`;
-  } else {
-    if(tier.min > lastKnownTierMin && lastKnownTierMin !== 0 && navigator.vibrate){
-      navigator.vibrate([30, 60, 30, 60, 60]); // little celebration buzz for a new tier
-    }
-    lastKnownTierMin = tier.min;
-    const nextTier = ACHIEVEMENT_TIERS.find(t => t.min > count);
-    const nextText = nextTier ? ` (${nextTier.min - count} more to "${nextTier.label}")` : '';
-    badge.textContent = `🏆 ${count} rated — ${tier.label}${nextText}`;
-  }
 }
 
 // Verified visit — requires being physically near a location before rating it
@@ -1665,7 +1702,7 @@ function attachStarHandlers(loc){
         }
 
         if(markers[loc.id]) markers[loc.id].setIcon(makeIcon(loc.id));
-        updateAchievementBadge();
+        updateMyProgressBadge();
       });
     });
   });
@@ -1890,7 +1927,6 @@ async function openLeaderboard(){
     document.getElementById('leaderboardLogoutBtn').addEventListener('click', async () => {
       await logOutAccount();
       updateAccountUI();
-      updateAchievementBadge();
       loadAllRatings();
       openLeaderboard(); // refresh this panel to reflect the logged-out state
     });
@@ -1962,7 +1998,6 @@ document.getElementById('authSignUpBtn').addEventListener('click', async () => {
     note.style.color = '#4caf50';
     note.textContent = 'Account created! You\'re logged in.';
     updateAccountUI();
-    updateAchievementBadge();
     loadAllRatings();
   } else {
     note.style.color = '#e57373';
@@ -1984,7 +2019,6 @@ document.getElementById('authLogInBtn').addEventListener('click', async () => {
     note.style.color = '#4caf50';
     note.textContent = 'Logged in!';
     updateAccountUI();
-    updateAchievementBadge();
     loadAllRatings();
   } else {
     note.style.color = '#e57373';
@@ -1996,7 +2030,6 @@ document.getElementById('authLogInBtn').addEventListener('click', async () => {
 document.getElementById('logOutBtn').addEventListener('click', async () => {
   await logOutAccount();
   updateAccountUI();
-  updateAchievementBadge();
   loadAllRatings();
   document.getElementById('authNote').textContent = '';
   document.getElementById('authUsername').value = '';
