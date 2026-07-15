@@ -46,13 +46,15 @@ map.addLayer(markerCluster);
 function zoomToMarker(marker){
   if(!marker) return;
 
-  map.setView(marker.getLatLng(), 16, { animate: false });
+  const zoom = 16;
+  const point = map.project(marker.getLatLng(), zoom);
 
-  // Position the selected marker lower on screen so the full popup stays visible.
-  const verticalOffset = Math.min(Math.round(window.innerHeight * 0.22), 220);
-  map.panBy([0, -verticalOffset], { animate: false });
+  // Place the marker lower so the popup is centered on screen.
+  point.y += Math.min(window.innerHeight * 0.28, 260);
 
-  marker.openPopup();
+  map.setView(map.unproject(point, zoom), zoom, { animate:true });
+
+  setTimeout(() => marker.openPopup(), 220);
 }
 
 // Register the service worker — required by Android/Chrome for "Add to Home Screen" to
@@ -816,8 +818,8 @@ function addMarker(loc){
     maxHeight: window.innerHeight * 0.6,
     autoPan: true,
     keepInView: true,
-    autoPanPaddingTopLeft: [20, Math.min(Math.round(window.innerHeight * 0.24), 230)],
-    autoPanPaddingBottomRight: [20, 70]
+    autoPanPaddingTopLeft: [25, 260],
+    autoPanPaddingBottomRight: [25, 120]
   });
   marker.on('popupopen', () => {
     // Leaflet auto-pans before all dynamic popup content has fully laid out.
