@@ -46,8 +46,8 @@
   </div>
   <div id="statPillRow">
     <span class="stat-pill" id="myProgressBadge"></span>
-    <span class="stat-pill" id="weeklyRecap" style="display:none;"></span>
-    <span class="stat-pill" id="mostRecentBadge" style="display:none;"></span>
+    <span class="stat-pill" id="weeklyRecap"></span>
+    <span class="stat-pill" id="mostRecentBadge"></span>
   </div>
 </div>
 
@@ -135,10 +135,6 @@
     right here with you.
   </p>
   <div id="leaderboardAccountNote" style="padding:12px 16px;border-bottom:1px solid #333;color:var(--cream);font-size:13px;"></div>
-  <div id="leaderboardTabs">
-    <button class="leaderboard-tab active" id="tab-bathroom" data-type="bathroom">🚻 Bathroom</button>
-    <button class="leaderboard-tab" id="tab-store" data-type="store">🏪 Store</button>
-  </div>
   <div id="leaderboardItems" style="flex:1;overflow-y:auto;padding:8px 0;"></div>
 </div>
 
@@ -147,7 +143,7 @@
     <span>👤 Account</span>
     <button id="accountClose">✕</button>
   </div>
-  <div style="padding:16px;">
+  <div style="padding:16px;overflow-y:auto;flex:1;">
     <div id="loggedOutView">
       <p style="color:var(--cream);font-size:13px;margin:0 0 12px;">
         Log in to make your name and rating history follow you across devices — otherwise
@@ -169,6 +165,19 @@
         Logged in as <b id="loggedInUsername" style="color:var(--amber);"></b>
       </p>
       <button class="btn btn-danger" id="logOutBtn" style="width:100%;">Log Out</button>
+    </div>
+
+    <div id="passportSection">
+      <div class="account-section-title">🎫 Bathroom Passport</div>
+      <p id="passportSyncNote" style="color:var(--muted);font-size:11.5px;margin:0 0 8px;display:none;">
+        This is tracked on this device only — log in to sync it across devices.
+      </p>
+      <div id="bathroomPassportBody"></div>
+    </div>
+
+    <div id="achievementsSection">
+      <div class="account-section-title">🏆 Achievements</div>
+      <div id="achievementsList"></div>
     </div>
   </div>
 </div>

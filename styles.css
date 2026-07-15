@@ -46,15 +46,15 @@
     box-shadow:0 2px 6px rgba(0,194,68,.3);
   }
   #statPillRow{
-    display:flex;gap:6px;margin-top:10px;overflow-x:auto;scrollbar-width:none;
-    -webkit-overflow-scrolling:touch;
+    position:relative;height:30px;margin-top:10px;overflow:hidden;
   }
-  #statPillRow::-webkit-scrollbar{display:none;}
   .stat-pill{
-    flex:none;font-size:12px;font-weight:600;color:var(--cream);white-space:nowrap;
+    position:absolute;top:0;left:0;font-size:12px;font-weight:600;color:var(--cream);white-space:nowrap;
     background:rgba(245,166,35,.12);border:1px solid rgba(245,166,35,.35);
-    padding:6px 11px;border-radius:20px;
+    padding:6px 11px;border-radius:20px;opacity:0;transition:opacity .4s ease;
+    max-width:100%;overflow:hidden;text-overflow:ellipsis;
   }
+  .stat-pill.ticker-active{opacity:1;}
   #mostRecentBadge{cursor:pointer;}
   #mapWrap{position:relative;flex:1 1 auto;min-height:0;}
   #map{position:absolute;inset:0;}
@@ -215,19 +215,58 @@
   }
   #accountPanel.show{display:flex;}
   #accountClose{background:none;border:none;color:var(--cream);font-size:22px;cursor:pointer;}
+
+  /* Bathroom Passport + Achievements */
+  .account-section-title{
+    font-weight:800;font-size:15px;color:var(--cream);margin:22px 0 10px;
+    padding-top:14px;border-top:1px solid #333;
+  }
+  #passportSection .account-section-title{border-top:none;margin-top:8px;}
+  .passport-stat-line{font-size:13.5px;color:var(--cream);margin-bottom:6px;}
+  .passport-progress-bar{
+    width:100%;height:10px;background:rgba(255,255,255,.08);border-radius:6px;overflow:hidden;
+    margin-bottom:10px;
+  }
+  .passport-progress-fill{height:100%;background:var(--amber);border-radius:6px;transition:width .3s ease;}
+  .passport-mini-stats{display:flex;gap:16px;font-size:12.5px;color:var(--muted);flex-wrap:wrap;}
+  .achievement-card{
+    display:flex;gap:12px;align-items:flex-start;padding:10px 0;border-bottom:1px solid #2a2a2a;
+  }
+  .achievement-card:last-child{border-bottom:none;}
+  .achievement-card .achievement-icon{font-size:24px;flex:none;width:32px;text-align:center;}
+  .achievement-card.locked .achievement-icon{opacity:.35;filter:grayscale(1);}
+  .achievement-info{flex:1;min-width:0;}
+  .achievement-name{font-weight:700;font-size:14px;color:var(--cream);}
+  .achievement-card.locked .achievement-name{color:var(--muted);}
+  .achievement-desc{font-size:12px;color:var(--muted);margin-top:1px;}
+  .achievement-date{font-size:11.5px;color:var(--amber);margin-top:3px;font-weight:600;}
+  .achievement-progress{font-size:11.5px;color:var(--muted);margin-top:3px;}
+
+  /* Achievement unlock toast */
+  .achievement-toast{
+    position:fixed;left:50%;top:16px;transform:translate(-50%,-140%);
+    background:var(--panel-bg);border:1px solid var(--amber);border-radius:12px;
+    padding:12px 16px;display:flex;align-items:center;gap:12px;z-index:5000;
+    box-shadow:0 6px 20px rgba(0,0,0,.5);transition:transform .4s ease;max-width:90vw;
+  }
+  .achievement-toast.show{transform:translate(-50%,0);}
+  .achievement-toast-icon{font-size:28px;flex:none;}
+  .achievement-toast-title{font-size:11px;color:var(--muted);font-weight:700;text-transform:uppercase;letter-spacing:.4px;}
+  .achievement-toast-name{font-size:15px;font-weight:800;color:var(--cream);}
+
+  .leaderboard-row-wrap{border-bottom:1px solid #333;}
   .leaderboard-row{
-    padding:10px 16px;border-bottom:1px solid #333;color:var(--cream);
-    display:flex;justify-content:space-between;align-items:center;
+    padding:10px 16px;color:var(--cream);
+    display:flex;align-items:center;gap:10px;cursor:pointer;
   }
   .leaderboard-rank{font-weight:800;color:var(--amber);width:28px;flex:none;}
-  .leaderboard-name{flex:1;font-weight:700;}
-  .leaderboard-count{color:var(--muted);font-size:13px;}
-  #leaderboardTabs{display:flex;border-bottom:1px solid #333;}
-  .leaderboard-tab{
-    flex:1;background:none;border:none;color:var(--muted);font-size:13px;font-weight:700;
-    padding:10px 8px;cursor:pointer;border-bottom:3px solid transparent;
+  .leaderboard-main{flex:1;min-width:0;}
+  .leaderboard-name{font-weight:800;font-size:14px;color:var(--cream);}
+  .leaderboard-arrow{flex:none;color:var(--muted);font-size:13px;}
+  .leaderboard-breakdown{
+    display:none;padding:0 16px 12px 54px;color:var(--muted);font-size:13px;line-height:1.6;
   }
-  .leaderboard-tab.active{color:var(--amber);border-bottom-color:var(--amber);}
+  .leaderboard-breakdown.open{display:block;}
   #installBanner{
     position:fixed;left:0;right:0;bottom:0;z-index:2000;
     background:var(--header-grad-top);border-top:2px solid var(--amber);

@@ -418,37 +418,61 @@ async function migrateAnonymousDataToAccount(oldAnonId, newUid, username){
         await deleteDoc(doc(db, 'displayNames', oldAnonId));
       }
     }
+
+    // Move check-ins over too — Bathroom Passport and several achievements (Road Warrior,
+    // Early Bird, Night Owl) depend on check-in history, which would otherwise be silently
+    // orphaned under the old anonymous ID after signing up.
+    const checkinsQuery = query(collection(db, 'checkins'), where('clientId', '==', oldAnonId));
+    const checkinsSnap = await getDocs(checkinsQuery);
+    for(const checkinDoc of checkinsSnap.docs){
+      const data = checkinDoc.data();
+      const locId = data.locId;
+      if(!locId) continue;
+      await setDoc(doc(db, 'checkins', locId + '_' + newUid), { ...data, clientId: newUid }, { merge: true });
+      await deleteDoc(checkinDoc.ref);
+    }
+
+    // Carry over any achievement progress already earned on this device, merging into
+    // whatever (if anything) the new account already has rather than overwriting it
+    const oldAchievementsSnap = await getDoc(doc(db, 'achievements', oldAnonId));
+    if(oldAchievementsSnap.exists()){
+      const oldAchievements = oldAchievementsSnap.data().achievements || {};
+      const newAchievementsSnap = await getDoc(doc(db, 'achievements', newUid));
+      const newAchievements = newAchievementsSnap.exists() ? (newAchievementsSnap.data().achievements || {}) : {};
+      const merged = { ...oldAchievements };
+      // Anything the new account already unlocked takes priority over the old device's record
+      Object.keys(newAchievements).forEach(k => {
+        if(newAchievements[k] && newAchievements[k].unlocked) merged[k] = newAchievements[k];
+      });
+      await setDoc(doc(db, 'achievements', newUid), { achievements: merged }, { merge: true });
+      await deleteDoc(doc(db, 'achievements', oldAnonId));
+    }
   }catch(e){
     console.error('migrateAnonymousDataToAccount failed (non-fatal):', e);
   }
 }
 
-async function reportName(clientId, name){
-  try{
-    const {db, collection, addDoc} = await fb();
-    await addDoc(collection(db, 'nameReports'), { clientId, name, ts: Date.now() });
-    return true;
-  }catch(e){
-    console.error('reportName failed', e);
-    return false;
-  }
-}
-
-async function loadLeaderboard(type){
-  type = type || 'bathroom';
+async function loadLeaderboard(){
   try{
     const {db, collection, getDocs} = await fb();
 
-    // Count distinct locations rated per device, for whichever type (bathroom/store) is active
+    // Count distinct locations rated per device — bathroom and store separately, plus a
+    // combined "Shops rated" total (any location rated on either front)
     const votesSnap = await getDocs(collection(db, 'votes'));
-    const locsByClient = {};
+    const bathroomLocsByClient = {};
+    const storeLocsByClient = {};
     votesSnap.forEach(d => {
       const v = d.data();
       const cid = v.clientId;
       if(!cid) return;
-      if(v[type] > 0){
-        if(!locsByClient[cid]) locsByClient[cid] = new Set();
-        locsByClient[cid].add(v.locId || d.id.split('_')[0]);
+      const locId = v.locId || d.id.split('_')[0];
+      if(v.bathroom > 0){
+        if(!bathroomLocsByClient[cid]) bathroomLocsByClient[cid] = new Set();
+        bathroomLocsByClient[cid].add(locId);
+      }
+      if(v.store > 0){
+        if(!storeLocsByClient[cid]) storeLocsByClient[cid] = new Set();
+        storeLocsByClient[cid].add(locId);
       }
     });
 
@@ -460,11 +484,24 @@ async function loadLeaderboard(type){
     const blocked = new Set();
     blocklistSnap.forEach(d => blocked.add(d.id));
 
-    // Only show devices that have actually set a name and aren't blocked from the board
-    const ranked = Object.keys(locsByClient)
+    // Only show devices that have actually set a name, aren't blocked, and have rated at
+    // least one bathroom or store — ranked by total distinct Shops rated (combined)
+    const allClientIds = new Set([...Object.keys(bathroomLocsByClient), ...Object.keys(storeLocsByClient)]);
+    const ranked = Array.from(allClientIds)
       .filter(cid => namesByClient[cid] && !blocked.has(cid))
-      .map(cid => ({ clientId: cid, name: namesByClient[cid], count: locsByClient[cid].size }))
-      .sort((a, b) => b.count - a.count)
+      .map(cid => {
+        const bathroomSet = bathroomLocsByClient[cid] || new Set();
+        const storeSet = storeLocsByClient[cid] || new Set();
+        const combined = new Set([...bathroomSet, ...storeSet]);
+        return {
+          clientId: cid,
+          name: namesByClient[cid],
+          shopsCount: combined.size,
+          bathroomCount: bathroomSet.size,
+          storeCount: storeSet.size
+        };
+      })
+      .sort((a, b) => b.shopsCount - a.shopsCount)
       .slice(0, 20);
 
     return ranked;
@@ -632,11 +669,11 @@ async function loadWeeklyRecap(){
     const el = document.getElementById('weeklyRecap');
     if(el){
       if(ratings === 0 && tips === 0){
-        el.style.display = 'none';
+        el.textContent = '';
       } else {
         el.textContent = `📈 This week: ${ratings} new rating${ratings===1?'':'s'}, ${tips} new tip${tips===1?'':'s'}`;
-        el.style.display = 'inline-block';
       }
+      refreshStatTicker();
     }
   }catch(e){
     // silently skip — recap is a nice-to-have, not critical
@@ -898,6 +935,7 @@ function attachCheckinHandler(loc){
           btn.disabled = false;
           btn.textContent = "✅ I've been here";
         }, 2000);
+        checkAndUnlockAchievements();
       } else {
         btn.disabled = false;
         btn.textContent = "✅ I've been here";
@@ -1021,7 +1059,204 @@ async function loadAllRatings(){
   }));
   updateMostRecentBadge();
   updateMyProgressBadge();
+  checkAndUnlockAchievements();
   map.invalidateSize(); // header height just changed (badges filled in) — tell Leaflet to recalculate
+}
+
+// ============================================================
+// Achievements & Bathroom Passport
+// ============================================================
+// Lighthearted, no XP/levels/streaks/leaderboard — just simple unlockable badges computed
+// from data we already have (ratings + check-ins). Unlock records are stored per-identity
+// (account UID if logged in, else this device's anonymous ID — consistent with how the rest
+// of the app already treats identity) in a new 'achievements' Firestore collection, so this
+// works immediately even signed-out, and syncs across devices once you log in.
+
+const ACHIEVEMENT_DEFS = [
+  { key:'firstFlush', icon:'🚽', name:'First Flush', desc:'Submit your first bathroom review',
+    calc: (s) => ({ done: s.bathroomRatedCount >= 1, current: Math.min(s.bathroomRatedCount,1), total:1 }) },
+  { key:'frequentFlusher', icon:'🧻', name:'Frequent Flusher', desc:'Review 10 different bathrooms',
+    calc: (s) => ({ done: s.bathroomRatedCount >= 10, current: Math.min(s.bathroomRatedCount,10), total:10 }) },
+  { key:'bathroomCritic', icon:'🕵️', name:'Bathroom Critic', desc:'Review 25 different bathrooms',
+    calc: (s) => ({ done: s.bathroomRatedCount >= 25, current: Math.min(s.bathroomRatedCount,25), total:25 }) },
+  { key:'royalFlush', icon:'👑', name:'Royal Flush', desc:'Give five different bathrooms a 5-star rating',
+    calc: (s) => ({ done: s.fiveStarCount >= 5, current: Math.min(s.fiveStarCount,5), total:5 }) },
+  { key:'roadWarrior', icon:'🛣️', name:'Road Warrior', desc:"Check in at 50 different Stewart's locations",
+    calc: (s) => ({ done: s.checkinCount >= 50, current: Math.min(s.checkinCount,50), total:50 }) },
+  { key:'hiddenGemHunter', icon:'💎', name:'Hidden Gem Hunter', desc:'Review a location that had fewer than 5 bathroom reviews at the time',
+    calc: (s) => ({ done: s.hiddenGemCount >= 1, current: Math.min(s.hiddenGemCount,1), total:1 }) },
+  { key:'earlyBird', icon:'☀️', name:'Early Bird', desc:'Check in before 5:00 AM',
+    calc: (s) => ({ done: s.hasEarlyBirdCheckin, current: s.hasEarlyBirdCheckin ? 1 : 0, total:1 }) },
+  { key:'nightOwl', icon:'🌙', name:'Night Owl', desc:'Check in after midnight',
+    calc: (s) => ({ done: s.hasNightOwlCheckin, current: s.hasNightOwlCheckin ? 1 : 0, total:1 }) },
+  { key:'countyCollector', icon:'🗺️', name:'County Collector', desc:'Visit locations in 10 different areas',
+    calc: (s) => ({ done: s.areaCount >= 10, current: Math.min(s.areaCount,10), total:10 }) },
+  { key:'stewartsLegend', icon:'🏁', name:"Stewart's Legend", desc:'Visit every location currently on the map',
+    calc: (s) => ({ done: s.totalLocations > 0 && s.visitedCount >= s.totalLocations, current: s.visitedCount, total: s.totalLocations }) }
+];
+
+// We don't have real county data in locations.js, only addresses — so "County Collector"
+// uses the city pulled from each address as a rough stand-in for "different areas visited"
+// rather than an actual county. Swap this out if/when real county data gets added.
+function getCityFromAddress(addr){
+  if(!addr) return 'Unknown';
+  const parts = addr.split(',').map(p => p.trim());
+  return parts.length >= 2 ? parts[parts.length - 2] : parts[0];
+}
+
+async function computeAchievementStats(){
+  const bathroomRatedIds = new Set();
+  const fiveStarIds = new Set();
+  const storeOrBathroomRatedIds = new Set();
+  let hiddenGemCount = 0;
+  Object.keys(myVoteCache).forEach(id => {
+    const v = myVoteCache[id];
+    if(!v) return;
+    if(v.bathroom > 0){ bathroomRatedIds.add(id); storeOrBathroomRatedIds.add(id); }
+    if(v.store > 0) storeOrBathroomRatedIds.add(id);
+    if(v.bathroom === 5) fiveStarIds.add(id);
+    if(v.wasHiddenGem) hiddenGemCount++;
+  });
+
+  let checkinLocIds = new Set();
+  let hasEarlyBirdCheckin = false;
+  let hasNightOwlCheckin = false;
+  try{
+    const {db, collection, query, where, getDocs} = await fb();
+    const myId = getEffectiveId();
+    const q = query(collection(db, 'checkins'), where('clientId', '==', myId));
+    const snap = await getDocs(q);
+    snap.forEach(d => {
+      const data = d.data();
+      if(data.locId) checkinLocIds.add(data.locId);
+      if(data.ts){
+        const hour = new Date(data.ts).getHours();
+        // Non-overlapping split of the pre-dawn hours: midnight–3:59am counts as Night Owl
+        // (out late), 4am–4:59am counts as Early Bird (up early before 5am).
+        if(hour >= 0 && hour < 4) hasNightOwlCheckin = true;
+        if(hour === 4) hasEarlyBirdCheckin = true;
+      }
+    });
+  }catch(e){
+    console.error('computeAchievementStats: checkins fetch failed (non-fatal)', e);
+  }
+
+  // "Visited" = checked in OR rated (either store or bathroom) — broader than check-ins alone
+  const visitedIds = new Set([...checkinLocIds, ...storeOrBathroomRatedIds]);
+
+  const areaSet = new Set();
+  visitedIds.forEach(id => {
+    const loc = seedLocations.find(l => l.id === id);
+    if(loc) areaSet.add(getCityFromAddress(loc.addr));
+  });
+
+  return {
+    bathroomRatedCount: bathroomRatedIds.size,
+    fiveStarCount: fiveStarIds.size,
+    hiddenGemCount,
+    checkinCount: checkinLocIds.size,
+    hasEarlyBirdCheckin,
+    hasNightOwlCheckin,
+    areaCount: areaSet.size,
+    visitedCount: visitedIds.size,
+    totalLocations: seedLocations.length
+  };
+}
+
+async function loadStoredAchievements(){
+  try{
+    const {db, doc, getDoc} = await fb();
+    const snap = await getDoc(doc(db, 'achievements', getEffectiveId()));
+    return snap.exists() ? (snap.data().achievements || {}) : {};
+  }catch(e){
+    console.error('loadStoredAchievements failed (non-fatal)', e);
+    return {};
+  }
+}
+
+async function saveStoredAchievements(achievements){
+  try{
+    const {db, doc, setDoc} = await fb();
+    await setDoc(doc(db, 'achievements', getEffectiveId()), { achievements }, { merge: true });
+  }catch(e){
+    console.error('saveStoredAchievements failed (non-fatal)', e);
+  }
+}
+
+function showAchievementToast(def){
+  const toast = document.createElement('div');
+  toast.className = 'achievement-toast';
+  toast.innerHTML = `<div class="achievement-toast-icon">${def.icon}</div><div><div class="achievement-toast-title">Achievement unlocked!</div><div class="achievement-toast-name">${def.name}</div></div>`;
+  document.body.appendChild(toast);
+  requestAnimationFrame(() => toast.classList.add('show'));
+  setTimeout(() => {
+    toast.classList.remove('show');
+    setTimeout(() => toast.remove(), 400);
+  }, 3500);
+}
+
+async function checkAndUnlockAchievements(){
+  const stats = await computeAchievementStats();
+  const stored = await loadStoredAchievements();
+  let changed = false;
+  const results = {};
+
+  ACHIEVEMENT_DEFS.forEach(def => {
+    const calc = def.calc(stats);
+    const prior = stored[def.key];
+    const wasUnlocked = !!(prior && prior.unlocked);
+    let unlockedAt = prior && prior.unlockedAt;
+
+    if(calc.done && !wasUnlocked){
+      unlockedAt = Date.now();
+      stored[def.key] = { unlocked: true, unlockedAt };
+      changed = true;
+      showAchievementToast(def);
+    } else if(!stored[def.key]){
+      stored[def.key] = { unlocked: calc.done };
+    }
+
+    results[def.key] = { ...def, unlocked: calc.done, unlockedAt: calc.done ? unlockedAt : null, current: calc.current, total: calc.total };
+  });
+
+  if(changed) await saveStoredAchievements(stored);
+  renderBathroomPassport(stats, results);
+  return { results, stats };
+}
+
+function renderBathroomPassport(stats, results){
+  const container = document.getElementById('bathroomPassportBody');
+  if(!container) return;
+  const pct = stats.totalLocations > 0 ? ((stats.visitedCount / stats.totalLocations) * 100).toFixed(1) : '0.0';
+  const unlockedCount = Object.values(results).filter(r => r.unlocked).length;
+
+  container.innerHTML = `
+    <div class="passport-stat-line">${stats.visitedCount} / ${stats.totalLocations} Stewart's visited — ${pct}% complete</div>
+    <div class="passport-progress-bar"><div class="passport-progress-fill" style="width:${Math.min(100,pct)}%;"></div></div>
+    <div class="passport-mini-stats">
+      <div>🚻 ${stats.bathroomRatedCount} bathrooms reviewed</div>
+      <div>🏆 ${unlockedCount} / ${ACHIEVEMENT_DEFS.length} achievements unlocked</div>
+    </div>
+  `;
+
+  const listEl = document.getElementById('achievementsList');
+  if(listEl){
+    listEl.innerHTML = ACHIEVEMENT_DEFS.map(def => {
+      const r = results[def.key];
+      const dateStr = r.unlockedAt ? new Date(r.unlockedAt).toLocaleDateString() : null;
+      const progressStr = (!r.unlocked && r.total > 1) ? `${r.current} / ${r.total}` : '';
+      return `<div class="achievement-card ${r.unlocked ? 'unlocked' : 'locked'}">
+        <div class="achievement-icon">${def.icon}</div>
+        <div class="achievement-info">
+          <div class="achievement-name">${def.name}</div>
+          <div class="achievement-desc">${def.desc}</div>
+          ${r.unlocked
+            ? `<div class="achievement-date">Unlocked ${dateStr}</div>`
+            : (progressStr ? `<div class="achievement-progress">${progressStr}</div>` : '')}
+        </div>
+      </div>`;
+    }).join('');
+  }
 }
 
 // Simple personal progress — how many of the total locations you've rated, no tiers/gamification
@@ -1036,8 +1271,36 @@ function updateMyProgressBadge(){
   const total = seedLocations.length;
   const remaining = total - count;
   el.textContent = count === 0
-    ? `📍 0 of ${total} stops rated — ${total} to go`
-    : `📍 ${count} of ${total} stops rated — ${remaining} to go`;
+    ? `📍 0 of ${total} Shops rated — ${total} to go`
+    : `📍 ${count} of ${total} Shops rated — ${remaining} to go`;
+  refreshStatTicker();
+}
+
+// Auto-rotating ticker — cycles through whichever stat pills currently have content, one at
+// a time, instead of requiring a manual horizontal swipe to see them all.
+let statTickerIndex = 0;
+let statTickerInterval = null;
+function refreshStatTicker(){
+  const pills = ['myProgressBadge', 'weeklyRecap', 'mostRecentBadge']
+    .map(id => document.getElementById(id))
+    .filter(el => el && el.textContent.trim() !== '');
+  pills.forEach(el => el.classList.remove('ticker-active'));
+  if(pills.length === 0) return;
+  if(statTickerIndex >= pills.length) statTickerIndex = 0;
+  pills[statTickerIndex].classList.add('ticker-active');
+
+  if(statTickerInterval) clearInterval(statTickerInterval);
+  if(pills.length > 1){
+    statTickerInterval = setInterval(() => {
+      const activePills = ['myProgressBadge', 'weeklyRecap', 'mostRecentBadge']
+        .map(id => document.getElementById(id))
+        .filter(el => el && el.textContent.trim() !== '');
+      if(activePills.length === 0) return;
+      activePills.forEach(el => el.classList.remove('ticker-active'));
+      statTickerIndex = (statTickerIndex + 1) % activePills.length;
+      activePills[statTickerIndex].classList.add('ticker-active');
+    }, 4000);
+  }
 }
 
 // Highlights whichever location was rated most recently, anywhere on the map
@@ -1056,12 +1319,12 @@ function updateMostRecentBadge(){
   if(!mostRecentLoc){
     el.textContent = '';
     el.onclick = null;
-    el.style.display = 'none';
+    refreshStatTicker();
     return;
   }
   el.textContent = `🕐 Most recently rated: ${mostRecentLoc.n} — ${relativeTimeFromNow(mostRecentTs)}`;
-  el.style.display = 'inline-block';
   el.onclick = () => zoomToMarker(markers[mostRecentLoc.id]);
+  refreshStatTicker();
 }
 
 // Verified visit — requires being physically near a location before rating it
@@ -1132,6 +1395,13 @@ function attachStarHandlers(loc){
         const sumDelta = val - prevVal;
         const countDelta = prevVal > 0 ? 0 : 1;
 
+        // Hidden Gem Hunter achievement — capture at the moment of first rating whether the
+        // community bathroom count was still under 5, since that fact can't be reconstructed
+        // later once more reviews come in.
+        if(type === 'bathroom' && prevVal === 0 && (agg.bathroomCount || 0) < 5){
+          myVote.wasHiddenGem = true;
+        }
+
         // Update local view optimistically so it feels instant
         agg[sumKey] += sumDelta;
         agg[countKey] += countDelta;
@@ -1163,6 +1433,7 @@ function attachStarHandlers(loc){
 
         if(markers[loc.id]) markers[loc.id].setIcon(makeIcon(loc.id));
         updateMyProgressBadge();
+        checkAndUnlockAchievements();
       });
     });
   });
@@ -1346,15 +1617,40 @@ async function buildListView(){
   const container=document.getElementById('listViewItems');
   const mode=document.getElementById('listSort').value;
   container.innerHTML='<div style="padding:16px;color:#999;">Loading...</div>';
-  if(mode==='closest' && !currentListPosition) currentListPosition=await getVerifiedPosition();
-  let rows=seedLocations.map(loc=>({loc,dist:currentListPosition?milesBetween(currentListPosition.lat,currentListPosition.lng,loc.lat,loc.lng):null,agg:ratingsCache[loc.id]||emptyAgg()}));
+
+  // Every list mode except explicit A–Z uses distance as either the main sort
+  // or the tie-breaker after the selected criterion. Reuse a recent GPS fix first.
+  if(mode!=='az' && !currentListPosition){
+    if(lastKnownPos && (Date.now()-lastKnownPos.ts)<5*60*1000) currentListPosition=lastKnownPos;
+    else currentListPosition=await getVerifiedPosition();
+  }
+
+  let rows=seedLocations.map(loc=>({
+    loc,
+    dist:currentListPosition?milesBetween(currentListPosition.lat,currentListPosition.lng,loc.lat,loc.lng):null,
+    agg:ratingsCache[loc.id]||emptyAgg()
+  }));
   const avg=r=>r.agg.bathroomCount?r.agg.bathroomSum/r.agg.bathroomCount:0;
-  if(mode==='closest') rows.sort((a,b)=>(a.dist??Infinity)-(b.dist??Infinity));
-  else if(mode==='best') rows.sort((a,b)=>avg(b)-avg(a)||b.agg.bathroomCount-a.agg.bathroomCount);
-  else if(mode==='reviewed') rows.sort((a,b)=>b.agg.bathroomCount-a.agg.bathroomCount);
-  else if(mode==='recent') rows.sort((a,b)=>(b.agg.lastUpdated||0)-(a.agg.lastUpdated||0));
-  else if(mode==='open') rows.sort((a,b)=>(isLocationOpenNow(b.loc)===true)-(isLocationOpenNow(a.loc)===true)||a.loc.n.localeCompare(b.loc.n));
-  else rows.sort((a,b)=>a.loc.n.localeCompare(b.loc.n));
+  const byDistanceThenName=(a,b)=>(a.dist??Infinity)-(b.dist??Infinity)||a.loc.n.localeCompare(b.loc.n);
+  const byName=(a,b)=>a.loc.n.localeCompare(b.loc.n);
+
+  if(mode==='closest') rows.sort(currentListPosition?byDistanceThenName:byName);
+  else if(mode==='best') rows.sort((a,b)=>{
+    const aRated=a.agg.bathroomCount>0,bRated=b.agg.bathroomCount>0;
+    if(aRated!==bRated) return bRated-aRated;
+    return avg(b)-avg(a)||(currentListPosition?byDistanceThenName(a,b):byName(a,b));
+  });
+  else if(mode==='reviewed') rows.sort((a,b)=>b.agg.bathroomCount-a.agg.bathroomCount||(currentListPosition?byDistanceThenName(a,b):byName(a,b)));
+  else if(mode==='recent') rows.sort((a,b)=>{
+    const aRecent=a.agg.lastUpdated||0,bRecent=b.agg.lastUpdated||0;
+    if(aRecent!==bRecent) return bRecent-aRecent;
+    return currentListPosition?byDistanceThenName(a,b):byName(a,b);
+  });
+  else if(mode==='open'){
+    rows=rows.filter(row=>isLocationOpenNow(row.loc)===true);
+    rows.sort(currentListPosition?byDistanceThenName:byName);
+  }
+  else rows.sort(byName);
   const labels={closest:'Closest',best:'Best bathrooms',reviewed:'Most reviewed',recent:'Recently reviewed',open:'Open now',az:'A–Z'};
   document.getElementById('listViewHeader').querySelector('span').textContent='All Locations — '+labels[mode];
   container.innerHTML=rows.map(({loc,dist,agg})=>{
@@ -1376,7 +1672,13 @@ async function openLeaderboard(){
   const noteEl = document.getElementById('leaderboardAccountNote');
   if(isLoggedIn()){
     const username = (window.__currentUser.email || '').split('@')[0];
-    noteEl.innerHTML = `You're on the board as <b style="color:var(--amber);">${escapeHtml(username)}</b>. <button id="leaderboardLogoutBtn" style="background:none;border:none;color:#e57373;text-decoration:underline;font-size:12px;cursor:pointer;padding:0 0 0 4px;">Log out</button>`;
+    noteEl.innerHTML = `You're on the board as <b style="color:var(--amber);">${escapeHtml(username)}</b>. <button id="leaderboardPassportBtn" style="background:none;border:none;color:var(--amber);text-decoration:underline;font-size:12px;cursor:pointer;padding:0 0 0 4px;">🎫 Passport</button> · <button id="leaderboardLogoutBtn" style="background:none;border:none;color:#e57373;text-decoration:underline;font-size:12px;cursor:pointer;padding:0 0 0 4px;">Log out</button>`;
+    document.getElementById('leaderboardPassportBtn').addEventListener('click', () => {
+      document.getElementById('leaderboardPanel').classList.remove('show');
+      document.getElementById('accountPanel').classList.add('show');
+      updateAccountUI();
+      checkAndUnlockAchievements();
+    });
     document.getElementById('leaderboardLogoutBtn').addEventListener('click', async () => {
       await logOutAccount();
       updateAccountUI();
@@ -1389,49 +1691,53 @@ async function openLeaderboard(){
       document.getElementById('leaderboardPanel').classList.remove('show');
       document.getElementById('accountPanel').classList.add('show');
       updateAccountUI();
+      checkAndUnlockAchievements();
     });
   }
 
   const itemsEl = document.getElementById('leaderboardItems');
   itemsEl.innerHTML = '<div style="padding:16px;color:#999;">Loading...</div>';
-  const ranked = await loadLeaderboard(activeLeaderboardTab);
+  const ranked = await loadLeaderboard();
   if(ranked === null){
     itemsEl.innerHTML = '<div style="padding:16px;color:#999;">Could not load the leaderboard — try again.</div>';
     return;
   }
   if(ranked.length === 0){
-    itemsEl.innerHTML = `<div style="padding:16px;color:#999;">No one's logged in and rated a ${activeLeaderboardTab} yet — be the first!</div>`;
+    itemsEl.innerHTML = `<div style="padding:16px;color:#999;">No one's logged in and rated a shop yet — be the first!</div>`;
     return;
   }
-  const label = activeLeaderboardTab === 'bathroom' ? 'bathroom' : 'store';
   itemsEl.innerHTML = ranked.map((r, i) =>
-    `<div class="leaderboard-row">
-      <span class="leaderboard-rank">#${i+1}</span>
-      <span class="leaderboard-name">${escapeHtml(r.name)}</span>
-      <span class="leaderboard-count">${r.count} ${label}${r.count === 1 ? '' : 's'} rated</span>
-      <button class="report-name-btn" data-clientid="${r.clientId}" data-name="${escapeHtml(r.name)}" title="Report this name" style="background:none;border:none;color:#e57373;cursor:pointer;font-size:13px;padding:0 0 0 8px;">🚩</button>
+    `<div class="leaderboard-row-wrap">
+      <div class="leaderboard-row" data-clientid="${r.clientId}">
+        <span class="leaderboard-rank">#${i+1}</span>
+        <div class="leaderboard-main">
+          <div class="leaderboard-name">${escapeHtml(r.name)}</div>
+        </div>
+        <span class="leaderboard-arrow" id="lb-arrow-${r.clientId}">▾</span>
+      </div>
+      <div class="leaderboard-breakdown" id="lb-breakdown-${r.clientId}">
+        <div>🚻 ${r.bathroomCount} bathroom${r.bathroomCount === 1 ? '' : 's'} rated</div>
+        <div>🏪 ${r.storeCount} store${r.storeCount === 1 ? '' : 's'} rated</div>
+      </div>
     </div>`
   ).join('');
 }
-
-document.getElementById('tab-bathroom').addEventListener('click', () => {
-  activeLeaderboardTab = 'bathroom';
-  document.getElementById('tab-bathroom').classList.add('active');
-  document.getElementById('tab-store').classList.remove('active');
-  openLeaderboard();
-});
-document.getElementById('tab-store').addEventListener('click', () => {
-  activeLeaderboardTab = 'store';
-  document.getElementById('tab-store').classList.add('active');
-  document.getElementById('tab-bathroom').classList.remove('active');
-  openLeaderboard();
-});
 
 document.getElementById('leaderboardToggle').addEventListener('click', openLeaderboard);
 document.getElementById('leaderboardClose').addEventListener('click', () => {
   document.getElementById('leaderboardPanel').classList.remove('show');
   suppressNextLocateClick = true;
   setTimeout(() => { suppressNextLocateClick = false; }, 400);
+});
+document.getElementById('leaderboardItems').addEventListener('click', (e) => {
+  const row = e.target.closest('.leaderboard-row');
+  if(!row) return;
+  const clientId = row.dataset.clientid;
+  const breakdown = document.getElementById('lb-breakdown-' + clientId);
+  const arrow = document.getElementById('lb-arrow-' + clientId);
+  if(!breakdown || !arrow) return;
+  const isOpen = breakdown.classList.toggle('open');
+  arrow.textContent = isOpen ? '▸' : '▾';
 });
 
 // Account panel
@@ -1444,6 +1750,8 @@ function updateAccountUI(){
     const username = email.split('@')[0];
     document.getElementById('loggedInUsername').textContent = username;
   }
+  const syncNote = document.getElementById('passportSyncNote');
+  if(syncNote) syncNote.style.display = loggedIn ? 'none' : 'block';
 }
 
 document.getElementById('accountClose').addEventListener('click', () => {
@@ -1505,28 +1813,6 @@ document.getElementById('logOutBtn').addEventListener('click', async () => {
 
 
 
-document.getElementById('leaderboardItems').addEventListener('click', async (e) => {
-  const btn = e.target.closest('.report-name-btn');
-  if(!btn) return;
-  if(btn.dataset.confirming !== '1'){
-    // First tap — ask for confirmation instead of submitting immediately
-    btn.dataset.confirming = '1';
-    btn.textContent = 'Sure?';
-    setTimeout(() => {
-      if(btn.dataset.confirming === '1'){
-        btn.dataset.confirming = '0';
-        btn.textContent = '🚩';
-      }
-    }, 3000);
-    return;
-  }
-  btn.dataset.confirming = '0';
-  btn.disabled = true;
-  btn.textContent = '...';
-  const ok = await reportName(btn.dataset.clientid, btn.dataset.name);
-  btn.textContent = ok ? '✅' : '❌';
-});
-
 document.getElementById('listViewItems').addEventListener('click', (e) => {
   const item = e.target.closest('.list-item');
   if(!item) return;
@@ -1574,7 +1860,7 @@ locateBtn.addEventListener('click',()=>{
   if(!navigator.geolocation){nearestInfo.style.display='block';nearestInfo.textContent="Your browser doesn't support location.";return;}
   locateBtn.disabled=true;locateBtn.textContent='🚽 Finding bathroom…';nearestInfo.style.display='none';
   navigator.geolocation.getCurrentPosition(async pos=>{
-    const user={lat:pos.coords.latitude,lng:pos.coords.longitude};lastKnownPos={...user,ts:Date.now()};
+    const user={lat:pos.coords.latitude,lng:pos.coords.longitude};lastKnownPos={...user,ts:Date.now()};currentListPosition=lastKnownPos;
     if(userMarker)map.removeLayer(userMarker);
     userMarker=L.marker([user.lat,user.lng],{icon:L.divIcon({className:'',html:'<div style="background:#2196f3;width:16px;height:16px;border-radius:50%;border:3px solid #fff;box-shadow:0 0 6px rgba(0,0,0,.6);"></div>',iconSize:[16,16],iconAnchor:[8,8]})}).addTo(map);
     const candidates=[...seedLocations].map(loc=>({loc,d:milesBetween(user.lat,user.lng,loc.lat,loc.lng)})).sort((a,b)=>a.d-b.d).slice(0,10).map(x=>x.loc);
