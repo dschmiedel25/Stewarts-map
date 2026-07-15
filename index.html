@@ -1485,7 +1485,13 @@ async function loadAllRatings(){
     loadedIds.add(loc.id);
     const marker = markers[loc.id];
     if(marker){
-      marker.setIcon(makeIcon(loc.id));
+      // Never swap the icon out from under a currently-open popup — replacing the marker's
+      // underlying DOM element while its popup is open is a known way to silently break/close
+      // that popup on some browsers (this was very likely the cause of pins "showing briefly
+      // and disappearing" on Android). Content updates are safe; icon updates wait until closed.
+      if(!marker.isPopupOpen()){
+        marker.setIcon(makeIcon(loc.id));
+      }
       marker.setPopupContent(popupHtml(loc, agg, myVote));
       if(marker.isPopupOpen()) attachStarHandlers(loc);
     }
@@ -1750,7 +1756,7 @@ document.getElementById('infoBtn').addEventListener('click', () => {
 map.on('zoomend', () => {
   seedLocations.forEach(loc => {
     const m = markers[loc.id];
-    if(m) m.setIcon(makeIcon(loc.id));
+    if(m && !m.isPopupOpen()) m.setIcon(makeIcon(loc.id));
   });
 });
 
