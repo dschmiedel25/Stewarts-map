@@ -43,18 +43,29 @@ L.control.zoom({ position: 'bottomright' }).addTo(map);
 const markerCluster = L.layerGroup();
 map.addLayer(markerCluster);
 
+function positionSelectedMarker(marker, animate = false){
+  if(!marker) return;
+
+  const mapSize = map.getSize();
+  const markerPoint = map.latLngToContainerPoint(marker.getLatLng());
+
+  const desiredX = mapSize.x * 0.5;
+  const desiredY = mapSize.y * 0.78;
+
+  const offsetX = markerPoint.x - desiredX;
+  const offsetY = markerPoint.y - desiredY;
+
+  if(Math.abs(offsetX) > 1 || Math.abs(offsetY) > 1){
+    map.panBy([offsetX, offsetY], { animate });
+  }
+}
+
 function zoomToMarker(marker){
   if(!marker) return;
 
-  const zoom = 16;
-  const point = map.project(marker.getLatLng(), zoom);
-
-  // Place the marker lower so the popup is centered on screen.
-  point.y += Math.min(window.innerHeight * 0.28, 260);
-
-  map.setView(map.unproject(point, zoom), zoom, { animate:true });
-
-  setTimeout(() => marker.openPopup(), 220);
+  map.setView(marker.getLatLng(), 16, { animate: false });
+  positionSelectedMarker(marker, false);
+  marker.openPopup();
 }
 
 // Register the service worker — required by Android/Chrome for "Add to Home Screen" to
@@ -816,24 +827,13 @@ function addMarker(loc){
   marker.bindPopup(popupHtml(loc, ratingsCache[loc.id], myVoteCache[loc.id]), {
     maxWidth: Math.min(280, window.innerWidth - 40),
     maxHeight: window.innerHeight * 0.6,
-    autoPan: true,
-    keepInView: true,
-    autoPanPaddingTopLeft: [25, 260],
-    autoPanPaddingBottomRight: [25, 120]
+    autoPan: false,
+    keepInView: false
   });
   marker.on('popupopen', () => {
-    // Leaflet auto-pans before all dynamic popup content has fully laid out.
-    // Re-check once the popup has rendered so its bottom is not clipped on phones.
-    setTimeout(() => {
-      const popup = marker.getPopup();
-      if(popup && popup._container){
-        map.panInside(marker.getLatLng(), {
-          paddingTopLeft: [20, Math.min(Math.round(window.innerHeight * 0.24), 230)],
-          paddingBottomRight: [20, 80],
-          animate: false
-        });
-      }
-    }, 60);
+    // Keep the selected pin centered horizontally and near the bottom of the
+    // visible map. The popup then grows upward with maximum available room.
+    requestAnimationFrame(() => positionSelectedMarker(marker, false));
 
     attachStarHandlers(loc);
     attachTipHandlers(loc);
