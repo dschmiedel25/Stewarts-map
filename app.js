@@ -60,13 +60,16 @@ function positionSelectedMarker(marker, animate = false){
   const visibleMapBottom = Math.min(mapRect.bottom, viewportHeight);
   const visibleMapHeight = Math.max(1, visibleMapBottom - mapRect.top);
 
-  const desiredX = mapRect.width * 0.5;
+  // Keep the selected pin within a horizontal safe zone from 40% to 60%.
+  // Pins already inside that range do not move left or right.
+  const minX = mapRect.width * 0.40;
+  const maxX = mapRect.width * 0.60;
+  const desiredX = Math.max(minX, Math.min(markerPoint.x, maxX));
 
-  // Put the pin roughly two-thirds down the visible MAP area.
-  // The popup then has room to grow upward without being cut off.
+  // Lower the pin only slightly from the previous version.
   const desiredY = Math.min(
-    visibleMapHeight * 0.72,
-    visibleMapHeight - 78
+    visibleMapHeight * 0.74,
+    visibleMapHeight - 72
   );
 
   const offsetX = markerPoint.x - desiredX;
