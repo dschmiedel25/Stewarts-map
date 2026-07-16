@@ -888,12 +888,22 @@ function popupHtml(loc, agg, myVote){
       <span class="checkin-count">${agg.checkinCount || 0} check-in${(agg.checkinCount || 0) === 1 ? '' : 's'}</span>
       <div class="save-note" id="checkin-note-${loc.id}"></div>
     </div>
-    <div class="rating-row">
-      <span class="rating-label">🚻 Bathroom — ${avgStr(agg.bathroomSum, agg.bathroomCount)}★ ${ratingConfidenceHtml(agg.bathroomCount)}</span>
-      ${starsHtml(loc.id,'bathroom',myVote.bathroom)}
-      <div class="star-quip" id="quip-bathroom-${loc.id}">${quipFor('bathroom', myVote.bathroom)}</div>
+    <div class="dual-rating-row">
+      <div class="rating-col">
+        <span class="rating-label">🚻 Bathroom</span>
+        <div class="rating-score-line"><span class="rating-score">${avgStr(agg.bathroomSum, agg.bathroomCount)}★</span> ${ratingConfidenceHtml(agg.bathroomCount)}</div>
+        ${starsHtml(loc.id,'bathroom',myVote.bathroom)}
+        <div class="star-quip" id="quip-bathroom-${loc.id}">${quipFor('bathroom', myVote.bathroom)}</div>
+        <div class="save-note" id="note-bathroom-${loc.id}"></div>
+      </div>
+      <div class="rating-col">
+        <span class="rating-label">🏪 Store</span>
+        <div class="rating-score-line"><span class="rating-score">${avgStr(agg.storeSum, agg.storeCount)}★</span> ${ratingConfidenceHtml(agg.storeCount)}</div>
+        ${starsHtml(loc.id,'store',myVote.store)}
+        <div class="star-quip" id="quip-store-${loc.id}">${quipFor('store', myVote.store)}</div>
+        <div class="save-note" id="note-store-${loc.id}"></div>
+      </div>
     </div>
-    <div class="save-note" id="note-bathroom-${loc.id}"></div>
     <div class="tips-section">
       <span class="rating-label">💬 Tips from visitors</span>
       <ul class="tips-list" id="tips-list-${loc.id}"><li style="color:#999;">Loading…</li></ul>
@@ -904,14 +914,8 @@ function popupHtml(loc, agg, myVote){
     </div>
     <div class="feature-summary"><div class="feature-title">🚻 Confirmed bathroom features</div><div class="feature-badges" id="feature-summary-${loc.id}">${amenitySummaryHtml(amenityCache[loc.id])}</div></div>
     ${amenityEditorHtml(loc.id, myVote)}
-    <div id="store-toggle-${loc.id}" class="store-rating-toggle">🏪 Store rating <span id="store-arrow-${loc.id}">▾</span></div>
+    <div id="store-toggle-${loc.id}" class="store-rating-toggle">🏪 Store details <span id="store-arrow-${loc.id}">▾</span></div>
     <div id="store-section-${loc.id}" class="store-rating-section collapsed">
-      <div class="rating-row">
-        <span class="rating-label">Store — ${avgStr(agg.storeSum, agg.storeCount)}★ ${ratingConfidenceHtml(agg.storeCount)}</span>
-        ${starsHtml(loc.id,'store',myVote.store)}
-        <div class="star-quip" id="quip-store-${loc.id}">${quipFor('store', myVote.store)}</div>
-      </div>
-      <div class="save-note" id="note-store-${loc.id}"></div>
       <div class="feature-summary"><div class="feature-title">🏪 Confirmed store features</div><div class="feature-badges" id="store-feature-summary-${loc.id}">${storeFeatureSummaryHtml(storeFeatureCache[loc.id])}</div></div>
       ${storeFeatureEditorHtml(loc.id, myVote)}
     </div>
