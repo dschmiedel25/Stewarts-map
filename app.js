@@ -34,70 +34,6 @@ Object.keys(CHAIN_REGISTRY).forEach(chainKey => {
 const locationsById = {};
 seedLocations.forEach(loc => { locationsById[loc.id] = loc; });
 
-const BRAND_FILTER_STORAGE_KEY = 'bathroomreport_visible_chains';
-
-function loadVisibleChainKeys(){
-  const allKeys = Object.keys(CHAIN_REGISTRY);
-  try{
-    const saved = JSON.parse(localStorage.getItem(BRAND_FILTER_STORAGE_KEY));
-    if(Array.isArray(saved)){
-      return new Set(saved.filter(key => CHAIN_REGISTRY[key]));
-    }
-  }catch(e){
-    console.warn('Could not load saved brand filters', e);
-  }
-  return new Set(allKeys);
-}
-
-let visibleChainKeys = loadVisibleChainKeys();
-
-function isChainVisible(loc){
-  return visibleChainKeys.has((loc && loc.chain) || DEFAULT_CHAIN_KEY);
-}
-
-function saveVisibleChainKeys(){
-  localStorage.setItem(BRAND_FILTER_STORAGE_KEY, JSON.stringify([...visibleChainKeys]));
-}
-
-function updateBrandFilterButton(){
-  const btn = document.getElementById('brandFilterToggle');
-  if(!btn) return;
-  const total = Object.keys(CHAIN_REGISTRY).length;
-  const shown = visibleChainKeys.size;
-  btn.classList.toggle('active', shown < total);
-  btn.textContent = shown === total ? '🏪 Brands' : `🏪 Brands ${shown}/${total}`;
-}
-
-function renderBrandFilterOptions(){
-  const wrap = document.getElementById('brandFilterOptions');
-  if(!wrap) return;
-  wrap.innerHTML = Object.entries(CHAIN_REGISTRY).map(([key, chain]) => `
-    <label class="brand-filter-option">
-      <input type="checkbox" value="${key}" ${visibleChainKeys.has(key) ? 'checked' : ''}>
-      <span class="brand-filter-swatch" style="background:${chain.color}"></span>
-      <span>${chain.name}</span>
-    </label>
-  `).join('');
-
-  wrap.querySelectorAll('input[type="checkbox"]').forEach(input => {
-    input.addEventListener('change', () => {
-      if(input.checked) visibleChainKeys.add(input.value);
-      else visibleChainKeys.delete(input.value);
-      saveVisibleChainKeys();
-      updateBrandFilterButton();
-      applyFilters();
-    });
-  });
-}
-
-function setAllBrandsVisible(visible){
-  visibleChainKeys = new Set(visible ? Object.keys(CHAIN_REGISTRY) : []);
-  saveVisibleChainKeys();
-  renderBrandFilterOptions();
-  updateBrandFilterButton();
-  applyFilters();
-}
-
 // Theme: defaults to the phone's system light/dark setting, but a manual toggle overrides it
 function applyTheme(theme){
   document.documentElement.setAttribute('data-theme', theme);
@@ -141,30 +77,6 @@ L.control.zoom({ position: 'bottomright' }).addTo(map);
 // so it's been removed entirely in favor of reliability. All markers just render directly.
 const markerCluster = L.layerGroup();
 map.addLayer(markerCluster);
-
-(function setupBrandFilter(){
-  const toggle = document.getElementById('brandFilterToggle');
-  const panel = document.getElementById('brandFilterPanel');
-  const selectAll = document.getElementById('brandSelectAll');
-  const clearAll = document.getElementById('brandClearAll');
-  if(!toggle || !panel) return;
-
-  renderBrandFilterOptions();
-  updateBrandFilterButton();
-
-  toggle.addEventListener('click', (event) => {
-    event.stopPropagation();
-    const open = panel.classList.toggle('show');
-    toggle.setAttribute('aria-expanded', open ? 'true' : 'false');
-  });
-  panel.addEventListener('click', event => event.stopPropagation());
-  selectAll.addEventListener('click', () => setAllBrandsVisible(true));
-  clearAll.addEventListener('click', () => setAllBrandsVisible(false));
-  document.addEventListener('click', () => {
-    panel.classList.remove('show');
-    toggle.setAttribute('aria-expanded', 'false');
-  });
-})();
 
 function positionSelectedMarker(marker, animate = false){
   if(!marker) return;
@@ -234,8 +146,6 @@ map.on('popupopen', () => {
   document.getElementById('missingBtn').style.display = 'none';
   document.getElementById('missingPanel').classList.remove('show');
   document.getElementById('legendBody').classList.add('collapsed');
-  document.getElementById('brandFilterToggle').style.display = 'none';
-  document.getElementById('brandFilterPanel').classList.remove('show');
   document.getElementById('openNowToggle').style.display = 'none';
   document.getElementById('listViewToggle').style.display = 'none';
   document.getElementById('leaderboardToggle').style.display = 'none';
@@ -243,7 +153,6 @@ map.on('popupopen', () => {
 map.on('popupclose', () => {
   document.getElementById('locateBtn').style.display = '';
   document.getElementById('missingBtn').style.display = '';
-  document.getElementById('brandFilterToggle').style.display = '';
   document.getElementById('openNowToggle').style.display = '';
   document.getElementById('listViewToggle').style.display = '';
   document.getElementById('leaderboardToggle').style.display = '';
@@ -1842,7 +1751,6 @@ async function attachTipHandlers(loc){
 
 // Load all seed locations — this is now instant since no storage calls happen until a pin is tapped
 seedLocations.forEach(loc => addMarker(loc));
-applyFilters();
 loadAllRatings();
 loadWeeklyRecap();
 
@@ -1978,9 +1886,8 @@ function applyFilters(){
   seedLocations.forEach(loc => {
     const m = markers[loc.id];
     if(!m) return;
-    const brandOk = isChainVisible(loc);
     const openOk = !showOnlyOpenNow || isLocationOpenNow(loc) !== false; // null (unknown) counts as OK
-    if(brandOk && openOk){
+    if(openOk){
       if(!markerCluster.hasLayer(m)) markerCluster.addLayer(m);
     } else {
       if(markerCluster.hasLayer(m)) markerCluster.removeLayer(m);
