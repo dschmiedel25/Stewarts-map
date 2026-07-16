@@ -262,15 +262,24 @@ const BATHROOM_AMENITIES = [
       single:'One shared restroom',
       multiple:"Separate men's & women's restrooms"
     }},
-  {key:'accessible', label:'Handicap accessible'},
-  {key:'changing', label:'Changing table'},
-  {key:'paper', label:'Paper towels'},
-  {key:'dryer', label:'Hand dryer'}
+  {key:'accessible', label:'Handicap accessible', stateIcons:{yes:'♿️'}},
+  {key:'changing', label:'Changing table', stateIcons:{yes:'🚼'}},
+  {key:'handDrying', label:'Hand drying', states:['unknown','paper','dryer','both'],
+    stateLabels:{unknown:'Not sure', paper:'Paper towels', dryer:'Hand dryer', both:'Both'},
+    stateIcons:{paper:'🧻', dryer:'💨', both:'🧻💨'}}
 ];
-const CONDITION_LABELS = {clean:'🟢 Clean', acceptable:'🟡 Acceptable', attention:'🟠 Needs attention', out:'🔴 Out of order'};
-const CONDITION_MAX_AGE = 48 * 60 * 60 * 1000;
 const amenityCache = {};
-const conditionCache = {};
+
+// Store-level features — separate from bathroom features (myVote.storeFeatures vs
+// myVote.amenities), tucked inside the already-collapsed Store rating section so the
+// bathroom-first flow stays exactly as quick as it was.
+const STORE_FEATURES = [
+  {key:'gas', label:'Gas & Diesel', stateIcons:{yes:'⛽'}},
+  {key:'evCharging', label:'EV Charging', stateIcons:{yes:'⚡'}},
+  {key:'indoorSeating', label:'Indoor seating', stateIcons:{yes:'🪑'}},
+  {key:'wifi', label:'WiFi', stateIcons:{yes:'📶'}}
+];
+const storeFeatureCache = {};
 
 // Cycles through whichever states this amenity defines (most are Not sure/Yes/No, but
 // Restroom type instead cycles Not sure/Single-person/Multiple stalls)
@@ -283,6 +292,11 @@ function amenityStateLabel(a, val){
 // restroom-type single/multiple states)
 const AMENITY_ANSWER_ICONS = {yes:'✅', no:'❌', unknown:'🤷', single:'🚪', multiple:'🚻'};
 
+function amenityAnswerIcon(a, val){
+  if(a.stateIcons && a.stateIcons[val]) return a.stateIcons[val];
+  return AMENITY_ANSWER_ICONS[val] || '•';
+}
+
 // Renders whichever single question comes next (the first one this person hasn't answered
 // yet), or a friendly completion message once every feature has an answer on record.
 function renderAmenityStepHtml(myVote){
@@ -294,7 +308,7 @@ function renderAmenityStepHtml(myVote){
   const a = BATHROOM_AMENITIES[idx];
   const states = a.states || ['unknown', 'yes', 'no'];
   const buttons = states.map(s =>
-    `<button type="button" class="amenity-answer-btn" data-key="${a.key}" data-value="${s}">${AMENITY_ANSWER_ICONS[s] || '•'} ${amenityStateLabel(a, s)}</button>`
+    `<button type="button" class="amenity-answer-btn" data-key="${a.key}" data-value="${s}">${amenityAnswerIcon(a, s)} ${amenityStateLabel(a, s)}</button>`
   ).join('');
   return `<div class="amenity-progress">Feature ${idx + 1} of ${BATHROOM_AMENITIES.length}</div>
     <div class="amenity-question-label">${a.label}</div>
@@ -316,7 +330,7 @@ function amenitySummaryHtml(summary){
     return x.yes >= 2 && x.yes > x.no;
   });
   if(!confirmed.length) return '<span class="feature-badge unconfirmed">No features confirmed yet</span>';
-  return confirmed.map(a => `<span class="feature-badge">✓ ${a.label}</span>`).join('');
+  return confirmed.map(a => `<span class="feature-badge">${amenityAnswerIcon(a, 'yes')} ${a.label}</span>`).join('');
 }
 
 // Same "confirmed" rule as the summary badges (at least 2 yes-votes, and more yes than no),
@@ -353,24 +367,58 @@ async function loadAmenitySummary(locId){
   }catch(e){ console.error('loadAmenitySummary failed', e); return null; }
 }
 
-async function loadCurrentCondition(locId){
-  try{
-    const {db, collection, query, where, getDocs} = await fb();
-    const snap = await getDocs(query(collection(db, 'conditionReports'), where('locId', '==', locId)));
-    const cutoff = Date.now() - CONDITION_MAX_AGE;
-    const reports=[];
-    snap.forEach(d => { const x=d.data(); if(x.ts >= cutoff) reports.push(x); });
-    reports.sort((a,b)=>b.ts-a.ts);
-    conditionCache[locId]=reports;
-    return reports;
-  }catch(e){ console.error('loadCurrentCondition failed', e); return []; }
+// ---- Store features — same one-at-a-time pattern, entirely separate data (myVote.storeFeatures) ----
+
+function renderStoreFeatureStepHtml(myVote){
+  const mine = myVote.storeFeatures || {};
+  const idx = STORE_FEATURES.findIndex(a => mine[a.key] === undefined);
+  if(idx === -1){
+    return `<div class="amenity-complete">🏪 That's everything — thanks for the intel!</div>`;
+  }
+  const a = STORE_FEATURES[idx];
+  const states = a.states || ['unknown', 'yes', 'no'];
+  const buttons = states.map(s =>
+    `<button type="button" class="store-feature-answer-btn" data-key="${a.key}" data-value="${s}">${amenityAnswerIcon(a, s)} ${amenityStateLabel(a, s)}</button>`
+  ).join('');
+  return `<div class="amenity-progress">Feature ${idx + 1} of ${STORE_FEATURES.length}</div>
+    <div class="amenity-question-label">${a.label}</div>
+    <div class="amenity-answer-row">${buttons}</div>`;
 }
 
-function conditionSummaryHtml(reports){
-  if(!reports || !reports.length) return 'No recent condition reports';
-  const counts={}; reports.forEach(r => counts[r.condition]=(counts[r.condition]||0)+1);
-  const best=Object.entries(counts).sort((a,b)=>b[1]-a[1])[0];
-  return `${CONDITION_LABELS[best[0]] || best[0]} · ${best[1]} report${best[1]===1?'':'s'} in the last 48 hours`;
+function storeFeatureEditorHtml(locId, myVote){
+  return `<div class="amenities-editor">
+    <div class="feature-title">🏪 Store features you saw</div>
+    <div class="store-feature-step" id="store-feature-step-${locId}">${renderStoreFeatureStepHtml(myVote)}</div>
+    <div class="save-note" id="store-feature-note-${locId}"></div>
+  </div>`;
+}
+
+function storeFeatureSummaryHtml(summary){
+  if(!summary) return '<span class="feature-badge unconfirmed">Loading features…</span>';
+  const confirmed = STORE_FEATURES.filter(a => {
+    const x = summary[a.key] || {yes:0,no:0};
+    return x.yes >= 2 && x.yes > x.no;
+  });
+  if(!confirmed.length) return '<span class="feature-badge unconfirmed">No features confirmed yet</span>';
+  return confirmed.map(a => `<span class="feature-badge">${amenityAnswerIcon(a, 'yes')} ${a.label}</span>`).join('');
+}
+
+async function loadStoreFeatureSummary(locId){
+  try{
+    const {db, collection, query, where, getDocs} = await fb();
+    const snap = await getDocs(query(collection(db, 'votes'), where('locId', '==', locId)));
+    const summary = {};
+    STORE_FEATURES.forEach(a => summary[a.key] = {yes:0,no:0});
+    snap.forEach(d => {
+      const features = d.data().storeFeatures || {};
+      STORE_FEATURES.forEach(a => {
+        if(features[a.key] === 'yes') summary[a.key].yes++;
+        if(features[a.key] === 'no') summary[a.key].no++;
+      });
+    });
+    storeFeatureCache[locId] = summary;
+    return summary;
+  }catch(e){ console.error('loadStoreFeatureSummary failed', e); return null; }
 }
 
 
@@ -846,16 +894,13 @@ function popupHtml(loc, agg, myVote){
       <div class="star-quip" id="quip-bathroom-${loc.id}">${quipFor('bathroom', myVote.bathroom)}</div>
     </div>
     <div class="save-note" id="note-bathroom-${loc.id}"></div>
-    <div class="condition-summary">
-      <div class="feature-title">🧹 Current condition</div>
-      <div id="condition-summary-${loc.id}">Loading…</div>
-      <div class="condition-buttons">
-        <button class="condition-btn" data-condition="clean">Clean</button>
-        <button class="condition-btn" data-condition="acceptable">Acceptable</button>
-        <button class="condition-btn" data-condition="attention">Needs attention</button>
-        <button class="condition-btn" data-condition="out">Out of order</button>
+    <div class="tips-section">
+      <span class="rating-label">💬 Tips from visitors</span>
+      <ul class="tips-list" id="tips-list-${loc.id}"><li style="color:#999;">Loading…</li></ul>
+      <div class="tip-input-row">
+        <input type="text" class="tip-input" id="tip-input-${loc.id}" maxlength="${MAX_TIP_LENGTH}" placeholder="e.g. need a key, buzzer required" />
+        <button class="btn btn-amber tip-submit" id="tip-submit-${loc.id}">Add</button>
       </div>
-      <div class="save-note" id="condition-note-${loc.id}"></div>
     </div>
     <div class="feature-summary"><div class="feature-title">🚻 Confirmed bathroom features</div><div class="feature-badges" id="feature-summary-${loc.id}">${amenitySummaryHtml(amenityCache[loc.id])}</div></div>
     ${amenityEditorHtml(loc.id, myVote)}
@@ -867,14 +912,8 @@ function popupHtml(loc, agg, myVote){
         <div class="star-quip" id="quip-store-${loc.id}">${quipFor('store', myVote.store)}</div>
       </div>
       <div class="save-note" id="note-store-${loc.id}"></div>
-    </div>
-    <div class="tips-section">
-      <span class="rating-label">💬 Tips from visitors</span>
-      <ul class="tips-list" id="tips-list-${loc.id}"><li style="color:#999;">Loading…</li></ul>
-      <div class="tip-input-row">
-        <input type="text" class="tip-input" id="tip-input-${loc.id}" maxlength="${MAX_TIP_LENGTH}" placeholder="e.g. need a key, buzzer required" />
-        <button class="btn btn-amber tip-submit" id="tip-submit-${loc.id}">Add</button>
-      </div>
+      <div class="feature-summary"><div class="feature-title">🏪 Confirmed store features</div><div class="feature-badges" id="store-feature-summary-${loc.id}">${storeFeatureSummaryHtml(storeFeatureCache[loc.id])}</div></div>
+      ${storeFeatureEditorHtml(loc.id, myVote)}
     </div>
   </div>`;
 }
@@ -909,7 +948,7 @@ function addMarker(loc){
     attachCheckinHandler(loc);
     attachStoreToggleHandler(loc);
     attachAmenityHandlers(loc);
-    attachConditionHandlers(loc);
+    attachStoreFeatureHandlers(loc);
   });
   markers[loc.id] = marker;
 }
@@ -1163,29 +1202,53 @@ async function attachAmenityHandlers(loc){
   });
 }
 
-async function attachConditionHandlers(loc){
-  const summaryEl=document.getElementById('condition-summary-'+loc.id);
-  const reports=await loadCurrentCondition(loc.id);
-  if(summaryEl) summaryEl.textContent=conditionSummaryHtml(reports);
-  const popup=document.querySelector(`.popup-inner[data-locid="${loc.id}"]`);
-  if(!popup) return;
-  popup.querySelectorAll('.condition-btn').forEach(oldBtn=>{
-    const btn=oldBtn.cloneNode(true); oldBtn.parentNode.replaceChild(btn,oldBtn);
-    btn.addEventListener('click', async()=>{
-      const note=document.getElementById('condition-note-'+loc.id);
-      if(note) note.textContent='Checking you\'re nearby…';
-      const verification=await verifyNearby(loc);
-      if(!verification.ok){if(note){note.style.color='#c62828';note.textContent='📍 You need to be at this Stewart\'s to post a current report.';}return;}
-      popup.querySelectorAll('.condition-btn').forEach(b=>b.disabled=true);
-      try{
-        const {db,doc,setDoc}=await fb();
-        const clientId=getEffectiveId();
-        await setDoc(doc(db,'conditionReports',loc.id+'_'+clientId),{locId:loc.id,clientId,condition:btn.dataset.condition,ts:Date.now()},{merge:true});
-        if(note){note.style.color='#2f6b3c';note.textContent='Current condition saved ✓';}
-        const fresh=await loadCurrentCondition(loc.id); if(summaryEl) summaryEl.textContent=conditionSummaryHtml(fresh);
-      }catch(e){if(note){note.style.color='#c62828';note.textContent='Could not save condition';}}
-      popup.querySelectorAll('.condition-btn').forEach(b=>b.disabled=false);
-    });
+async function attachStoreFeatureHandlers(loc){
+  const summaryEl=document.getElementById('store-feature-summary-'+loc.id);
+  const summary=await loadStoreFeatureSummary(loc.id);
+  if(summaryEl) summaryEl.innerHTML=storeFeatureSummaryHtml(summary);
+
+  const stepOrig = document.getElementById('store-feature-step-' + loc.id);
+  if(!stepOrig) return;
+  const stepEl = stepOrig.cloneNode(true);
+  stepOrig.parentNode.replaceChild(stepEl, stepOrig);
+
+  stepEl.addEventListener('click', async (e) => {
+    const btn = e.target.closest('.store-feature-answer-btn');
+    if(!btn) return;
+    const key = btn.dataset.key;
+    const value = btn.dataset.value;
+    const note = document.getElementById('store-feature-note-' + loc.id);
+    const allBtns = stepEl.querySelectorAll('.store-feature-answer-btn');
+
+    allBtns.forEach(b => b.disabled = true);
+    if(note){ note.style.color=''; note.textContent = "Checking you're nearby…"; }
+
+    const verification = await verifyNearby(loc);
+    if(!verification.ok){
+      if(note){ note.style.color = '#c62828'; note.textContent = "📍 You need to be at this Stewart's to report its features."; }
+      allBtns.forEach(b => b.disabled = false);
+      return;
+    }
+
+    const myVote = myVoteCache[loc.id] || emptyVote();
+    const storeFeatures = { ...(myVote.storeFeatures || {}), [key]: value };
+    const updatedVote = { ...myVote, storeFeatures };
+    myVoteCache[loc.id] = updatedVote;
+
+    const ok = await saveMyVote(loc.id, updatedVote);
+    if(!ok){
+      if(note){ note.style.color = '#c62828'; note.textContent = 'Could not save — try again.'; }
+      allBtns.forEach(b => b.disabled = false);
+      return;
+    }
+
+    if(note) note.textContent = '';
+    if(navigator.vibrate) navigator.vibrate(10);
+
+    stepEl.innerHTML = renderStoreFeatureStepHtml(updatedVote);
+
+    const fresh = await loadStoreFeatureSummary(loc.id);
+    if(summaryEl) summaryEl.innerHTML = storeFeatureSummaryHtml(fresh);
   });
 }
 
