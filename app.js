@@ -76,7 +76,9 @@ function positionSelectedMarker(marker, animate = false){
   const offsetY = markerPoint.y - desiredY;
 
   if(Math.abs(offsetX) > 1 || Math.abs(offsetY) > 1){
-    map.panBy([offsetX, offsetY], { animate });
+    // Leaflet moves map content opposite the pan direction.
+    // Subtract 24px so the selected pin lands slightly LOWER on screen.
+    map.panBy([offsetX, offsetY - 24], { animate });
   }
 }
 
