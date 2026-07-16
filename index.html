@@ -23,8 +23,6 @@
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css" />
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js" crossorigin="anonymous"></script>
 <script type="module" src="firebase.js"></script>
-<script src="stewarts-locations.js"></script>
-<script src="cumberland-farms-locations.js"></script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@500;600;700&display=swap" rel="stylesheet">
@@ -52,7 +50,7 @@
   <p id="headerSubtitle">Find the best bathrooms. Rated by the community.
     <button id="infoBtn" title="About this app">ℹ️</button>
   </p>
-  <span id="chainBadge">🚽 Currently Featuring Stewart's Shops</span>
+  <span id="chainBadge">🚽 Featuring Stewart's Shops & Cumberland Farms</span>
   <div id="statPillRow">
     <span class="stat-pill" id="myProgressBadge"></span>
     <span class="stat-pill" id="weeklyRecap"></span>
@@ -74,12 +72,21 @@
   </div>
 </div>
 
+<button id="brandFilterToggle" type="button" aria-expanded="false" aria-controls="brandFilterPanel">🏪 Brands</button>
+<div id="brandFilterPanel" aria-label="Choose store brands">
+  <div id="brandFilterTitle">Show on map</div>
+  <div id="brandFilterOptions"></div>
+  <div id="brandFilterActions">
+    <button type="button" id="brandSelectAll">Select all</button>
+    <button type="button" id="brandClearAll">Clear all</button>
+  </div>
+</div>
 <button id="openNowToggle">🕐 Open now</button>
 <button id="listViewToggle">📋 List</button>
 <button id="leaderboardToggle">🏆 Leaderboard</button>
 
 <div id="map"></div>
-<button id="locateBtn" aria-label="Find the closest Stewart's bathroom by driving distance">🚽 Bathroom Now</button>
+<button id="locateBtn" aria-label="Find the closest visible bathroom by driving distance">🚽 Bathroom Now</button>
 <div id="nearestInfo"></div>
 
 <button id="missingBtn">📍 We Missed One?</button>
@@ -217,6 +224,7 @@
 </div>
 
 <script src="stewarts-locations.js"></script>
+<script src="cumberland-farms-locations.js"></script>
 <!-- To add a chain: <script src="<chain>-locations.js"></script> here, then register it in app.js's CHAIN_REGISTRY -->
 <script src="app.js"></script>
 </body>
