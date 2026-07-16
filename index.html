@@ -61,6 +61,7 @@
 </div>
 
 <div id="mapWrap">
+<div id="topLeftControls">
 <div id="legend">
   <div id="legendToggle">🔑 Key <span id="legendArrow">▾</span></div>
   <div id="legendBody">
@@ -72,6 +73,12 @@
     <div><span class="dot" style="background:#8a8a8a"></span>Not yet rated</div>
     <div>◆ Diamond = you reviewed it</div>
   </div>
+</div>
+
+<div id="chainFilter">
+  <div id="chainFilterToggle">🏪 Chains <span id="chainFilterArrow">▾</span></div>
+  <div id="chainFilterBody"></div>
+</div>
 </div>
 
 <button id="openNowToggle">🕐 Open now</button>
@@ -124,7 +131,7 @@
           <p>You can share a pin or report wrong information from its popup.</p>
           <p>Accounts use a username and password with no email. There is currently no password recovery.</p>
           <p class="onboardingDisclaimer">BathroomReport is an independent, community-created project and is not affiliated with or endorsed by Stewart's Shops or any other business listed.</p>
-          <p class="onboardingUpdated" id="locationDataUpdated">Location data updated: July 16, 2026</p>
+          <p class="onboardingUpdated">Location data updated: July 14, 2026</p>
           <a href="https://cash.app/$BathroomReport" target="_blank" rel="noopener" id="cashAppBtn">🍔 Enjoying this? Buy me lunch</a>
         </div>
       </details>
@@ -137,7 +144,7 @@
 </div>
 
 <div id="listViewPanel">
-  <div id="listViewHeader" class="panel-header-row">
+  <div id="listViewHeader">
     <span>All Locations</span>
     <button id="listViewClose">✕</button>
   </div>
@@ -158,7 +165,7 @@
 </div>
 
 <div id="leaderboardPanel">
-  <div id="leaderboardHeader" class="panel-header-row">
+  <div id="leaderboardHeader">
     <span>🏆 Leaderboard</span>
     <button id="leaderboardClose">✕</button>
   </div>
@@ -173,7 +180,7 @@
 </div>
 
 <div id="accountPanel">
-  <div id="accountHeader" class="panel-header-row">
+  <div id="accountHeader">
     <span>👤 Account</span>
     <button id="accountClose">✕</button>
   </div>

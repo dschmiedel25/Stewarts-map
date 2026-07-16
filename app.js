@@ -891,12 +891,15 @@ function popupHtml(loc, agg, myVote){
         ? '<span style="color:#c62828;font-weight:700;">Closed now</span>'
         : '';
     hoursLine = `<div class="hours-line">🕐 ${hoursText}${statusHtml ? ' · ' + statusHtml : ''}</div>`;
+  } else {
+    hoursLine = `<div class="hours-line">🕐 Hours not listed for this store yet — know them? Tap 🚩 below to send them in.</div>`;
   }
   const recency = relativeTimeFromNow(agg.lastUpdated);
   const recencyLine = recency ? `<div class="hours-line">📝 Last rated ${recency}</div>` : '';
   const chain = chainFor(loc);
   return `<div class="popup-inner" data-locid="${loc.id}">
     <div class="chain-badge" style="background:${chain.color};color:${chain.textColor};">${chain.name}</div>
+    <h3>${loc.n}</h3>
     <div class="addr">${loc.addr}${loc.num ? ' &middot; Shop #' + loc.num : ''}</div>
     ${hoursLine}
     <div id="accessible-badge-${loc.id}">${accessibleBadgeHtml(loc.id)}</div>
@@ -964,13 +967,6 @@ const myVoteCache = {};
 const loadedIds = new Set();
 
 function addMarker(loc){
-  // Guard against bad source data (e.g. a location with no lat/lng yet) — one invalid
-  // entry used to throw here and silently kill every script line after it on the page,
-  // which broke unrelated things like the onboarding popup and toolbar buttons.
-  if(loc.lat == null || loc.lng == null || isNaN(loc.lat) || isNaN(loc.lng)){
-    console.warn('Skipping location with missing/invalid coordinates:', loc.id, loc.n);
-    return;
-  }
   // Start every pin with placeholder (unrated-looking) data — colors/rings fill in as real data arrives
   ratingsCache[loc.id] = ratingsCache[loc.id] || emptyAgg();
   myVoteCache[loc.id] = myVoteCache[loc.id] || emptyVote();
@@ -1893,13 +1889,87 @@ function applyFilters(){
     const m = markers[loc.id];
     if(!m) return;
     const openOk = !showOnlyOpenNow || isLocationOpenNow(loc) !== false; // null (unknown) counts as OK
-    if(openOk){
+    const chainOk = activeChains.has(loc.chain || DEFAULT_CHAIN_KEY);
+    if(openOk && chainOk){
       if(!markerCluster.hasLayer(m)) markerCluster.addLayer(m);
     } else {
       if(markerCluster.hasLayer(m)) markerCluster.removeLayer(m);
     }
   });
 }
+
+// Chain filter — lets people show/hide pins per chain when more than one is registered.
+// Selection persists across visits via localStorage.
+let activeChains = new Set(Object.keys(CHAIN_REGISTRY));
+(function(){
+  const saved = localStorage.getItem('activeChains');
+  if(!saved) return;
+  try{
+    const savedArr = JSON.parse(saved);
+    if(Array.isArray(savedArr) && savedArr.length) activeChains = new Set(savedArr);
+  }catch(e){ /* malformed saved value — keep default of all chains active */ }
+})();
+
+function saveActiveChains(){
+  localStorage.setItem('activeChains', JSON.stringify(Array.from(activeChains)));
+}
+
+function renderChainFilter(){
+  const wrap = document.getElementById('chainFilter');
+  const body = document.getElementById('chainFilterBody');
+  if(!wrap || !body) return;
+  const chainKeys = Object.keys(CHAIN_REGISTRY);
+  if(chainKeys.length < 2){
+    // Only one chain registered — nothing meaningful to filter, so hide the control entirely
+    wrap.style.display = 'none';
+    return;
+  }
+  body.innerHTML = chainKeys.map(key => {
+    const chain = CHAIN_REGISTRY[key];
+    const checked = activeChains.has(key) ? 'checked' : '';
+    return `<label class="chain-filter-row">
+      <input type="checkbox" class="chain-filter-checkbox" data-chain="${key}" ${checked}>
+      <span class="dot" style="background:${chain.color}"></span>${escapeHtml(chain.name)}
+    </label>`;
+  }).join('');
+}
+
+document.getElementById('chainFilterBody')?.addEventListener('change', (e) => {
+  const cb = e.target.closest('.chain-filter-checkbox');
+  if(!cb) return;
+  const key = cb.dataset.chain;
+  if(cb.checked) activeChains.add(key); else activeChains.delete(key);
+  // Never allow every chain to be switched off at once — that would just blank the map
+  if(activeChains.size === 0){
+    activeChains.add(key);
+    cb.checked = true;
+  }
+  saveActiveChains();
+  applyFilters();
+});
+
+// Collapsible chain filter panel — same remembered-collapse pattern as the legend
+(function(){
+  const toggle = document.getElementById('chainFilterToggle');
+  const body = document.getElementById('chainFilterBody');
+  const arrow = document.getElementById('chainFilterArrow');
+  if(!toggle || !body || !arrow) return;
+
+  function setCollapsed(collapsed){
+    body.classList.toggle('collapsed', collapsed);
+    arrow.style.transform = collapsed ? 'rotate(-90deg)' : 'rotate(0deg)';
+    localStorage.setItem('chainFilterCollapsed', collapsed ? '1' : '0');
+  }
+
+  const saved = localStorage.getItem('chainFilterCollapsed');
+  setCollapsed(saved === null ? true : saved === '1'); // collapsed by default so it doesn't crowd the legend
+
+  toggle.addEventListener('click', () => {
+    setCollapsed(!body.classList.contains('collapsed'));
+  });
+})();
+renderChainFilter();
+applyFilters();
 
 document.getElementById('openNowToggle').addEventListener('click', () => {
   showOnlyOpenNow = !showOnlyOpenNow;
@@ -2188,7 +2258,10 @@ function bathroomNowCard(result,fallback=false){
   const agg=ratingsCache[result.loc.id]||emptyAgg(); const open=isLocationOpenNow(result.loc);
   const distance=Number.isFinite(result.distanceMiles)?`${result.distanceMiles.toFixed(1)} mi`:'Distance unavailable';
   const duration=Number.isFinite(result.durationMinutes)?` · ${Math.round(result.durationMinutes)} min`:'';
-  return `<div class="bathroom-now-card"><div class="now-title">🚽 ${fallback?'Closest location':'Closest bathroom by driving distance'}</div><b>${result.loc.n}</b><br>${distance}${duration}<br>${open===true?'🟢 Open now':open===false?'🔴 Closed now':'⚪ Hours unavailable'}<br>🚻 ${avgStr(agg.bathroomSum,agg.bathroomCount)}★ · ${agg.bathroomCount} rating${agg.bathroomCount===1?'':'s'}${fallback?'<br><small>Driving route unavailable; using straight-line distance.</small>':''}<div class="now-actions"><button class="btn btn-primary" id="bathroom-now-directions">🧭 Get Directions</button><button class="btn btn-secondary" id="bathroom-now-view">View pin</button></div></div>`;
+  const hoursMissingNote=open===null?'<br><small>No hours listed for this store — tap "View pin" then 🚩 to send them in.</small>':'';
+  const outsideSelection=!activeChains.has(result.loc.chain || DEFAULT_CHAIN_KEY);
+  const chainNote=outsideSelection?`<br><small>Nothing close by in your selected chains, so this ${escapeHtml((CHAIN_REGISTRY[result.loc.chain]||{}).name||'nearby')} location is shown instead.</small>`:'';
+  return `<div class="bathroom-now-card"><div class="now-title">🚽 ${fallback?'Closest location':'Closest bathroom by driving distance'}</div><b>${result.loc.n}</b><br>${distance}${duration}<br>${open===true?'🟢 Open now':open===false?'🔴 Closed now':'⚪ Hours unavailable'}<br>🚻 ${avgStr(agg.bathroomSum,agg.bathroomCount)}★ · ${agg.bathroomCount} rating${agg.bathroomCount===1?'':'s'}${fallback?'<br><small>Driving route unavailable; using straight-line distance.</small>':''}${hoursMissingNote}${chainNote}<div class="now-actions"><button class="btn btn-primary" id="bathroom-now-directions">🧭 Get Directions</button><button class="btn btn-secondary" id="bathroom-now-view">View pin</button></div></div>`;
 }
 let userMarker=null;
 const locateBtn=document.getElementById('locateBtn'),nearestInfo=document.getElementById('nearestInfo');
@@ -2207,7 +2280,27 @@ locateBtn.addEventListener('click',()=>{
     const user={lat:pos.coords.latitude,lng:pos.coords.longitude};lastKnownPos={...user,ts:Date.now()};currentListPosition=lastKnownPos;
     if(userMarker)map.removeLayer(userMarker);
     userMarker=L.marker([user.lat,user.lng],{icon:L.divIcon({className:'',html:'<div style="background:#2196f3;width:16px;height:16px;border-radius:50%;border:3px solid #fff;box-shadow:0 0 6px rgba(0,0,0,.6);"></div>',iconSize:[16,16],iconAnchor:[8,8]})}).addTo(map);
-    const candidates=[...seedLocations].map(loc=>({loc,d:milesBetween(user.lat,user.lng,loc.lat,loc.lng)})).sort((a,b)=>a.d-b.d).slice(0,10).map(x=>x.loc);
+    // Prefer the selected chains, but don't strand someone far from their nearest pick —
+    // if nothing selected is within a reasonable driving distance, widen to every chain
+    // (still open-only) so the closest real option wins instead.
+    const CHAIN_FALLBACK_MILES = 20;
+    let eligible = seedLocations.filter(loc =>
+      activeChains.has(loc.chain || DEFAULT_CHAIN_KEY) && isLocationOpenNow(loc) !== false
+    );
+    const nearestSelectedMiles = eligible.reduce((min,loc) => {
+      const d = milesBetween(user.lat, user.lng, loc.lat, loc.lng);
+      return d < min ? d : min;
+    }, Infinity);
+    if(nearestSelectedMiles > CHAIN_FALLBACK_MILES){
+      eligible = seedLocations.filter(loc => isLocationOpenNow(loc) !== false);
+    }
+    const candidates=eligible.map(loc=>({loc,d:milesBetween(user.lat,user.lng,loc.lat,loc.lng)})).sort((a,b)=>a.d-b.d).slice(0,10).map(x=>x.loc);
+    if(!candidates.length){
+      locateBtn.disabled=false;locateBtn.textContent='🚽 Bathroom Now';
+      nearestInfo.style.display='block';
+      nearestInfo.textContent='No open bathrooms found nearby right now.';
+      return;
+    }
     try{
       const options=await getDrivingOptions(user,candidates);
       options.sort((a,b)=>{const rank=x=>isLocationOpenNow(x.loc)===true?0:isLocationOpenNow(x.loc)===null?1:2;return rank(a)-rank(b)||a.distanceMiles-b.distanceMiles;});

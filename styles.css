@@ -146,18 +146,28 @@
     flex:1;font-size:16px;padding:8px 10px;border:1px solid var(--popup-border);border-radius:6px;
     min-width:0;background:var(--popup-tip-input-bg);color:var(--popup-text);
   }
-  #legend{
-    position:absolute;top:10px;left:10px;z-index:500;background:var(--panel-bg);
+  #topLeftControls{
+    position:absolute;top:10px;left:10px;z-index:500;
+    display:flex;flex-direction:column;align-items:flex-start;gap:8px;
+  }
+  #legend, #chainFilter{
+    background:var(--panel-bg);
     padding:8px 10px;border-radius:8px;font-size:12px;line-height:1.6;border:1px solid var(--panel-border);
     max-width:150px;
   }
-  #legendToggle{
+  #legendToggle, #chainFilterToggle{
     cursor:pointer;font-weight:700;color:var(--cream);white-space:nowrap;
     display:flex;justify-content:space-between;align-items:center;gap:8px;
   }
-  #legendBody{margin-top:6px;}
-  #legendBody.collapsed{display:none;}
-  #legendToggle.collapsed-toggle #legendArrow{transform:rotate(-90deg);display:inline-block;}
+  #legendBody, #chainFilterBody{margin-top:6px;}
+  #legendBody.collapsed, #chainFilterBody.collapsed{display:none;}
+  #legendToggle.collapsed-toggle #legendArrow,
+  #chainFilterToggle.collapsed-toggle #chainFilterArrow{transform:rotate(-90deg);display:inline-block;}
+  .chain-filter-row{
+    display:flex;align-items:center;gap:6px;padding:3px 0;cursor:pointer;
+    color:var(--cream);white-space:nowrap;
+  }
+  .chain-filter-row input{margin:0;cursor:pointer;}
   #openNowToggle{
     position:absolute;top:10px;right:10px;z-index:500;font-size:12px;font-weight:700;
     background:var(--panel-bg);color:var(--cream);border:1px solid var(--panel-border);
@@ -345,7 +355,7 @@
     flex-direction:column;
   }
   #listViewPanel.show{display:flex;}
-  .panel-header-row{
+  #listViewHeader, #leaderboardHeader, #accountHeader{
     flex:none;display:flex;justify-content:space-between;align-items:center;
     padding:14px 16px;font-size:17px;font-weight:700;color:var(--cream);
     border-bottom:2px solid var(--amber);
