@@ -1,16 +1,27 @@
-const CACHE_NAME = 'stewarts-bathroom-report-v2';
+const CACHE_NAME = 'bathroomreport-v3';
 const APP_SHELL = [
   './',
   './index.html',
   './styles.css',
   './firebase.js',
-  './locations.js',
+  './stewarts-locations.js',
+  './cumberland-farms-locations.js',
+  './wawa-locations.js',
   './app.js',
   './manifest.webmanifest'
 ];
 
 self.addEventListener('install', event => {
-  event.waitUntil(caches.open(CACHE_NAME).then(cache => cache.addAll(APP_SHELL)));
+  // Cache each file independently rather than cache.addAll (which fails the ENTIRE
+  // install if even one URL 404s — this is exactly what happened when locations.js
+  // was renamed during the multi-chain refactor, silently breaking every update since).
+  event.waitUntil(
+    caches.open(CACHE_NAME).then(cache =>
+      Promise.all(APP_SHELL.map(url =>
+        cache.add(url).catch(err => console.warn('sw precache skipped (not fatal):', url, err))
+      ))
+    )
+  );
   self.skipWaiting();
 });
 
