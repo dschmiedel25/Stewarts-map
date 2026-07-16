@@ -262,7 +262,7 @@ const BATHROOM_AMENITIES = [
       single:'One shared restroom',
       multiple:"Separate men's & women's restrooms"
     }},
-  {key:'accessible', label:'Accessible'},
+  {key:'accessible', label:'Handicap accessible'},
   {key:'changing', label:'Changing table'},
   {key:'paper', label:'Paper towels'},
   {key:'dryer', label:'Hand dryer'}
@@ -317,6 +317,22 @@ function amenitySummaryHtml(summary){
   });
   if(!confirmed.length) return '<span class="feature-badge unconfirmed">No features confirmed yet</span>';
   return confirmed.map(a => `<span class="feature-badge">✓ ${a.label}</span>`).join('');
+}
+
+// Same "confirmed" rule as the summary badges (at least 2 yes-votes, and more yes than no),
+// specifically for handicap-accessible — used both for the prominent popup badge and for
+// filtering the list view.
+function isConfirmedAccessible(summary){
+  if(!summary || !summary.accessible) return false;
+  const x = summary.accessible;
+  return x.yes >= 2 && x.yes > x.no;
+}
+
+function accessibleBadgeHtml(locId){
+  const summary = amenityCache[locId];
+  if(!summary) return ''; // not loaded yet — attachAmenityHandlers fills this in once it is
+  if(!isConfirmedAccessible(summary)) return '';
+  return '<div class="accessible-badge">♿ Handicap accessible — confirmed by visitors</div>';
 }
 
 async function loadAmenitySummary(locId){
@@ -707,49 +723,63 @@ async function addTip(id, text){
   try{
     const {db, doc, setDoc, arrayUnion} = await fb();
     await setDoc(doc(db, 'tips', id), { tips: arrayUnion(text) }, { merge: true });
-    // Store enough information for FlushPanel to hide this activity automatically
-    // if the tip is later edited or deleted.
-    logActivity('tip', {
-      locId: id,
-      text,
-      sourceId: `tip:${id}:${text}`
-    });
+    logActivity('tip', { locId: id, text });
     return true;
   }catch(e){
     return false;
   }
 }
 
-// Activity is a display feed only. Live totals come from votes and tips.
-// Rich source fields let FlushPanel automatically exclude deleted content.
-async function logActivity(type, details = {}){
+// Weekly recap — lightweight activity log, just enough to show "X new this week"
+async function logActivity(type, extra){
   try{
     const {db, collection, addDoc} = await fb();
-    await addDoc(collection(db, 'activity'), {
-      type,
-      ts: Date.now(),
-      deleted: false,
-      ...details
-    });
+    await addDoc(collection(db, 'activity'), { type, ts: Date.now(), ...(extra || {}) });
   }catch(e){
-    // non-critical — the app itself still saves even if the feed entry fails
+    // non-critical — recap will just undercount slightly if this fails
   }
 }
 
 async function loadWeeklyRecap(){
   try{
-    const {db, collection, query, where, getDocs} = await fb();
+    const {db, collection, query, where, getDocs, doc, getDoc} = await fb();
     const cutoff = Date.now() - 7 * 24 * 60 * 60 * 1000;
     const q = query(collection(db, 'activity'), where('ts', '>=', cutoff));
     const snap = await getDocs(q);
-    let ratings = 0, tips = 0;
+
+    // Live-verify each entry against the actual current votes/tips data, rather than
+    // trusting the activity log's raw count — this way, if a review or tip gets deleted
+    // (individually, or via a location reset), it stops counting immediately instead of
+    // needing an admin to run a separate cleanup step.
+    const checks = [];
     snap.forEach(d => {
       const item = d.data();
       if(item.deleted === true) return;
-      const t = item.type;
-      if(t === 'rating') ratings++;
-      else if(t === 'tip') tips++;
+      if(item.type === 'rating' && item.sourceId){
+        checks.push(
+          getDoc(doc(db, 'votes', item.sourceId))
+            .then(vSnap => vSnap.exists() ? 'rating' : null)
+            .catch(() => null)
+        );
+      } else if(item.type === 'tip' && item.locId && typeof item.text === 'string'){
+        checks.push(
+          getDoc(doc(db, 'tips', item.locId))
+            .then(tSnap => {
+              const tips = tSnap.exists() && Array.isArray(tSnap.data().tips) ? tSnap.data().tips : [];
+              return tips.includes(item.text) ? 'tip' : null;
+            })
+            .catch(() => null)
+        );
+      }
+      // Entries missing the fields needed to verify them (e.g. logged before this check
+      // existed) are silently skipped rather than counted as either — safer than risking
+      // a stale/incorrect count.
     });
+
+    const results = await Promise.all(checks);
+    let ratings = 0, tips = 0;
+    results.forEach(r => { if(r === 'rating') ratings++; else if(r === 'tip') tips++; });
+
     const el = document.getElementById('weeklyRecap');
     if(el){
       if(ratings === 0 && tips === 0){
@@ -784,6 +814,7 @@ function popupHtml(loc, agg, myVote){
     <h3>${loc.n}</h3>
     <div class="addr">${loc.addr}${loc.num ? ' &middot; Shop #' + loc.num : ''}</div>
     ${hoursLine}
+    <div id="accessible-badge-${loc.id}">${accessibleBadgeHtml(loc.id)}</div>
     ${recencyLine}
     <div class="popup-actions">
       <button class="btn btn-primary directions-btn" id="directions-btn-${loc.id}" data-lat="${loc.lat}" data-lng="${loc.lng}">🧭 Directions</button>
@@ -1080,6 +1111,8 @@ async function attachAmenityHandlers(loc){
   const summaryEl=document.getElementById('feature-summary-'+loc.id);
   const summary=await loadAmenitySummary(loc.id);
   if(summaryEl) summaryEl.innerHTML=amenitySummaryHtml(summary);
+  const badgeEl = document.getElementById('accessible-badge-' + loc.id);
+  if(badgeEl) badgeEl.innerHTML = accessibleBadgeHtml(loc.id);
 
   const stepOrig = document.getElementById('amenity-step-' + loc.id);
   if(!stepOrig) return;
@@ -1508,10 +1541,6 @@ function attachStarHandlers(loc){
         const agg = ratingsCache[loc.id] || emptyAgg();
         const myVote = myVoteCache[loc.id] || emptyVote();
         const prevVal = myVote[type];
-        // A vote document represents one rating submission for one person/location.
-        // Only the first store-or-bathroom rating creates a feed entry; later edits do not
-        // inflate the public rating count.
-        const wasCompletelyUnrated = (myVote.store || 0) === 0 && (myVote.bathroom || 0) === 0;
 
         const sumKey = type + 'Sum';
         const countKey = type + 'Count';
@@ -1543,14 +1572,7 @@ function attachStarHandlers(loc){
 
         const okAgg = await bumpAggregate(loc.id, sumKey, sumDelta, countKey, countDelta);
         const okVote = await saveMyVote(loc.id, myVote);
-        if(okAgg && okVote && wasCompletelyUnrated){
-          const clientId = getEffectiveId();
-          logActivity('rating', {
-            locId: loc.id,
-            clientId,
-            sourceId: `vote:${loc.id}_${clientId}`
-          });
-        }
+        if(okAgg) logActivity('rating', { sourceId: loc.id + '_' + getEffectiveId(), locId: loc.id });
         if(note) note.textContent = (okAgg && okVote) ? 'Saved ✓ — visible to everyone' : 'Save failed';
         if(okAgg && okVote) maybeShowSupportPrompt();
 
@@ -1778,9 +1800,38 @@ document.getElementById('openNowToggle').addEventListener('click', () => {
 
 // List view — sortable without adding a permanent map search bar
 let currentListPosition = null;
+// Bulk lookup of confirmed-accessible locations for the List view filter — one full scan
+// of votes, cached for the rest of the session rather than re-querying every time the
+// filter's toggled.
+let accessibleLocIdsCache = null;
+async function loadAccessibleLocIds(){
+  if(accessibleLocIdsCache) return accessibleLocIdsCache;
+  try{
+    const {db, collection, getDocs} = await fb();
+    const snap = await getDocs(collection(db, 'votes'));
+    const tally = {};
+    snap.forEach(d => {
+      const v = d.data();
+      if(!v.locId || !v.amenities || !v.amenities.accessible) return;
+      if(!tally[v.locId]) tally[v.locId] = {yes:0, no:0};
+      if(v.amenities.accessible === 'yes') tally[v.locId].yes++;
+      if(v.amenities.accessible === 'no') tally[v.locId].no++;
+    });
+    const confirmedIds = new Set(
+      Object.keys(tally).filter(id => tally[id].yes >= 2 && tally[id].yes > tally[id].no)
+    );
+    accessibleLocIdsCache = confirmedIds;
+    return confirmedIds;
+  }catch(e){
+    console.error('loadAccessibleLocIds failed', e);
+    return new Set();
+  }
+}
+
 async function buildListView(){
   const container=document.getElementById('listViewItems');
   const mode=document.getElementById('listSort').value;
+  const accessibleOnly=document.getElementById('accessibleOnly').checked;
   container.innerHTML='<div style="padding:16px;color:#999;">Loading...</div>';
 
   // Every list mode except explicit A–Z uses distance as either the main sort
@@ -1795,6 +1846,12 @@ async function buildListView(){
     dist:currentListPosition?milesBetween(currentListPosition.lat,currentListPosition.lng,loc.lat,loc.lng):null,
     agg:ratingsCache[loc.id]||emptyAgg()
   }));
+
+  if(accessibleOnly){
+    const accessibleIds = await loadAccessibleLocIds();
+    rows = rows.filter(row => accessibleIds.has(row.loc.id));
+  }
+
   const avg=r=>r.agg.bathroomCount?r.agg.bathroomSum/r.agg.bathroomCount:0;
   const byDistanceThenName=(a,b)=>(a.dist??Infinity)-(b.dist??Infinity)||a.loc.n.localeCompare(b.loc.n);
   const byName=(a,b)=>a.loc.n.localeCompare(b.loc.n);
@@ -1825,6 +1882,7 @@ async function buildListView(){
   }).join('');
 }
 document.getElementById('listSort').addEventListener('change',buildListView);
+document.getElementById('accessibleOnly').addEventListener('change',buildListView);
 document.getElementById('listViewToggle').addEventListener('click',()=>{buildListView();document.getElementById('listViewPanel').classList.add('show');});
 document.getElementById('listViewClose').addEventListener('click',()=>{document.getElementById('listViewPanel').classList.remove('show');suppressNextLocateClick=true;setTimeout(()=>{suppressNextLocateClick=false;},400);});
 
