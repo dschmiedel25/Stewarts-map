@@ -66,9 +66,10 @@ function positionSelectedMarker(marker, animate = false){
   const maxX = mapRect.width * 0.60;
   const desiredX = Math.max(minX, Math.min(markerPoint.x, maxX));
 
-  // Lower the pin only slightly from the previous version.
+  // Place the selected pin near the bottom of the visible map so the
+  // popup opens upward, matching the intended mobile layout.
   const desiredY = Math.min(
-    visibleMapHeight * 0.74,
+    visibleMapHeight * 0.90,
     visibleMapHeight - 72
   );
 
@@ -76,9 +77,7 @@ function positionSelectedMarker(marker, animate = false){
   const offsetY = markerPoint.y - desiredY;
 
   if(Math.abs(offsetX) > 1 || Math.abs(offsetY) > 1){
-    // Leaflet moves map content opposite the pan direction.
-    // Subtract 24px so the selected pin lands slightly LOWER on screen.
-    map.panBy([offsetX, offsetY - 24], { animate });
+    map.panBy([offsetX, offsetY], { animate });
   }
 }
 
