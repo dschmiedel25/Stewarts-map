@@ -60,6 +60,13 @@ button,input{font:inherit}button{touch-action:manipulation}a{color:var(--accent)
 @media(max-width:1050px){.stat-row{grid-template-columns:repeat(3,minmax(0,1fr))}.dashboard-grid{grid-template-columns:1fr}}
 @media(max-width:780px){.admin-layout{display:block}.sidebar{position:static;height:auto;padding:12px;border-right:0;border-bottom:1px solid var(--line);display:block}.brand-lockup{padding:0}.side-label,.side-nav,.sidebar-foot{display:none}.mobile-head{display:block}.main-content{padding:18px 12px 34px}.topbar{align-items:center}.page-title h1{font-size:23px}.stat-row{grid-template-columns:repeat(2,minmax(0,1fr));gap:9px}.stat-box:last-child{grid-column:span 2}}
 @media(max-width:520px){.topbar{display:block}#adminToolbar{margin-top:14px}#adminToolbar button{flex:1}.stat-box{padding:14px}.stat-box b{font-size:23px}.panel-header{padding:14px}th,td{padding:10px 12px}}
+
+.page-view{display:none}.page-view.active{display:block}.nav-badge{margin-left:auto;min-width:20px;height:20px;padding:0 6px;border-radius:999px;background:rgba(67,198,203,.14);color:var(--accent);display:inline-grid;place-items:center;font-size:10px}.nav-link.active .nav-badge{background:var(--accent);color:#07121f}
+.quick-grid{display:grid;grid-template-columns:1.15fr .85fr;gap:16px}.activity-list{display:grid}.activity-item{display:grid;grid-template-columns:40px minmax(0,1fr) auto;gap:12px;align-items:start;padding:14px 18px;border-bottom:1px solid var(--line)}.activity-item:last-child{border-bottom:0}.activity-icon{width:36px;height:36px;border-radius:12px;background:rgba(67,198,203,.1);display:grid;place-items:center}.activity-title{font-weight:800;font-size:13px}.activity-meta{font-size:11px;color:var(--muted);margin-top:4px}.activity-time{font-size:10px;color:#6f8599;white-space:nowrap}.empty-state{padding:28px;text-align:center;color:var(--muted);font-size:12px}
+.page-actions{display:flex;gap:8px;flex-wrap:wrap}.status-tabs{display:flex;gap:7px;flex-wrap:wrap;padding:14px 16px;border-bottom:1px solid var(--line)}.status-tab{border:1px solid var(--line);background:#0c1929;color:#9db0c1;border-radius:999px;padding:8px 12px;font-size:11px;font-weight:800;cursor:pointer}.status-tab.active{background:var(--accent);border-color:var(--accent);color:#07121f}.status-pill{display:inline-flex;align-items:center;padding:4px 8px;border-radius:999px;font-size:10px;font-weight:850;text-transform:uppercase;letter-spacing:.05em}.status-pending{background:rgba(243,189,99,.14);color:var(--warning)}.status-resolved{background:rgba(87,200,145,.14);color:var(--success)}.status-dismissed{background:rgba(145,166,187,.12);color:#aab8c5}.report-card{padding:16px 18px;border-bottom:1px solid var(--line)}.report-card:last-child{border-bottom:0}.report-head{display:flex;justify-content:space-between;gap:12px;align-items:flex-start}.report-type{font-size:14px;font-weight:900}.report-location{font-size:12px;color:#c5d2de;margin-top:5px}.report-copy{margin:12px 0;color:#afc0cf;font-size:12px;line-height:1.55;white-space:pre-wrap}.report-foot{display:flex;justify-content:space-between;gap:12px;align-items:center;flex-wrap:wrap}.report-actions{display:flex;gap:7px;flex-wrap:wrap}.mini-btn{border:1px solid var(--line);background:var(--surface2);color:#dce7ef;border-radius:9px;padding:7px 10px;font-size:10px;font-weight:850;cursor:pointer}.mini-btn.resolve{background:rgba(87,200,145,.13);color:#7ee0ad;border-color:rgba(87,200,145,.25)}.mini-btn.dismiss{background:rgba(145,166,187,.1);color:#bac6d1}.mini-btn.reopen{background:rgba(243,189,99,.12);color:var(--warning)}.mini-btn.danger{background:rgba(239,91,99,.12);color:#ff8f95;border-color:rgba(239,91,99,.22)}
+.tips-toolbar{display:flex;gap:10px;padding:14px 16px;border-bottom:1px solid var(--line)}.tips-toolbar input,.tips-toolbar select{background:#0b1727;color:var(--text);border:1px solid var(--line);border-radius:11px;padding:10px 12px}.tips-toolbar input{flex:1}.tips-list{display:grid}.tip-row{display:grid;grid-template-columns:minmax(0,1fr) minmax(180px,.55fr) auto;gap:14px;align-items:center;padding:14px 18px;border-bottom:1px solid var(--line)}.tip-row:last-child{border-bottom:0}.tip-copy{font-size:13px;line-height:1.45}.tip-location{font-size:11px;color:var(--muted)}
+@media(max-width:1050px){.quick-grid{grid-template-columns:1fr}}@media(max-width:780px){.side-nav{display:flex!important;overflow:auto;margin-top:12px;padding-bottom:2px}.nav-link{white-space:nowrap;width:auto}.sidebar-foot{display:none!important}.tip-row{grid-template-columns:1fr}.activity-item{grid-template-columns:36px minmax(0,1fr)}.activity-time{grid-column:2}.report-head{display:block}.status-pill{margin-top:8px}}
+
 </style>
 </head>
 <body>
@@ -86,10 +93,12 @@ button,input{font:inherit}button{touch-action:manipulation}a{color:var(--accent)
     </div>
     <div class="side-label">Moderator Console</div>
     <nav class="side-nav">
-      <a class="nav-link active" href="#dashboard"><span class="nav-icon">▦</span>Dashboard</a>
-      <a class="nav-link" href="#reportsPanel"><span class="nav-icon">⚑</span>Reports</a>
-      <a class="nav-link" href="#locationsPanel"><span class="nav-icon">⌖</span>Locations</a>
-      <a class="nav-link" href="#namesPanel"><span class="nav-icon">♛</span>Leaderboard</a>
+      <button class="nav-link active" data-page="dashboard"><span class="nav-icon">▦</span>Dashboard</button>
+      <button class="nav-link" data-page="reports"><span class="nav-icon">⚑</span>Reports <span class="nav-badge" id="navReports">0</span></button>
+      <button class="nav-link" data-page="locations"><span class="nav-icon">⌖</span>Locations</button>
+      <button class="nav-link" data-page="tips"><span class="nav-icon">💡</span>Tips</button>
+      <button class="nav-link" data-page="requests"><span class="nav-icon">＋</span>Location requests <span class="nav-badge" id="navMissing">0</span></button>
+      <button class="nav-link" data-page="leaderboard"><span class="nav-icon">♛</span>Leaderboard</button>
     </nav>
     <div class="sidebar-foot">
       <span id="adminIdentity"></span>
@@ -97,39 +106,52 @@ button,input{font:inherit}button{touch-action:manipulation}a{color:var(--accent)
     </div>
   </aside>
 
-  <div class="main-content" id="dashboard">
+  <div class="main-content">
     <header class="topbar">
-      <div class="page-title"><div class="eyebrow">Moderator Console</div><h1>FlushPanel</h1><p>Review activity, handle reports, and manage BathroomReport data.</p></div>
+      <div class="page-title"><div class="eyebrow">Moderator Console</div><h1 id="pageHeading">Dashboard</h1><p id="pageSubheading">A quick view of what is happening across BathroomReport.</p></div>
       <div id="adminToolbar"><button class="admin-btn secondary" id="refreshBtn" type="button">↻ Refresh data</button></div>
     </header>
     <div id="globalError" role="alert"></div>
-    <section class="stat-row" id="statRow">
-      <div class="stat-box"><b id="statLocations">—</b>Locations</div>
-      <div class="stat-box"><b id="statRated">—</b>Rated locations</div>
-      <div class="stat-box"><b id="statTips">—</b>Tips submitted</div>
-      <div class="stat-box"><b id="statReports">—</b>Open reports</div>
-      <div class="stat-box"><b id="statMissing">—</b>Location requests</div>
+
+    <section class="page-view active" data-view="dashboard">
+      <section class="stat-row" id="statRow">
+        <div class="stat-box"><b id="statLocations">—</b>Locations</div>
+        <div class="stat-box"><b id="statRated">—</b>Rated locations</div>
+        <div class="stat-box"><b id="statTips">—</b>Tips</div>
+        <div class="stat-box"><b id="statReports">—</b>Pending reports</div>
+        <div class="stat-box"><b id="statMissing">—</b>Location requests</div>
+      </section>
+      <div class="quick-grid">
+        <section class="panel"><div class="panel-header"><div><h2 class="panel-title">Recent activity</h2><p class="panel-note">Newest reports, requests, ratings, and tips</p></div></div><div id="recentActivity" class="activity-list"><div class="empty-state">Loading…</div></div></section>
+        <section class="panel"><div class="panel-header"><div><h2 class="panel-title">Most active locations</h2><p class="panel-note">Locations with the most ratings</p></div></div><div id="activeLocations" class="activity-list"><div class="empty-state">Loading…</div></div></section>
+      </div>
+      <div class="dashboard-grid">
+        <section class="panel"><div class="panel-header"><div><h2 class="panel-title">Newest pending reports</h2><p class="panel-note">App and location-data issues needing attention</p></div><button class="mini-btn" data-go="reports">View all</button></div><div id="dashboardReports" class="activity-list"><div class="empty-state">Loading…</div></div></section>
+        <section class="panel"><div class="panel-header"><div><h2 class="panel-title">Newest tips</h2><p class="panel-note">A quick sample of recently loaded tips</p></div><button class="mini-btn" data-go="tips">View all</button></div><div id="dashboardTips" class="activity-list"><div class="empty-state">Loading…</div></div></section>
+      </div>
     </section>
 
-    <div class="dashboard-grid" id="reportsPanel">
-      <section class="panel">
-        <div class="panel-header"><div><h2 class="panel-title">⌖ Location requests</h2><p class="panel-note">Suggested locations waiting for review</p></div></div>
-        <div class="table-wrap"><table><thead><tr><th>Description</th><th>Submitted</th><th>Action</th></tr></thead><tbody id="missingBody"><tr><td colspan="3" class="loading">Loading…</td></tr></tbody></table></div>
+    <section class="page-view" data-view="reports">
+      <section class="panel"><div class="panel-header"><div><h2 class="panel-title">App and listing reports</h2><p class="panel-note">Duplicate locations, wrong hours, incorrect pins, closures, app bugs, and other data problems</p></div></div>
+        <div class="status-tabs"><button class="status-tab active" data-status="pending">Pending</button><button class="status-tab" data-status="resolved">Resolved</button><button class="status-tab" data-status="dismissed">Dismissed</button><button class="status-tab" data-status="all">All</button></div>
+        <div id="reportsCards"><div class="empty-state">Loading…</div></div>
       </section>
-      <section class="panel">
-        <div class="panel-header"><div><h2 class="panel-title">⚑ Reported issues</h2><p class="panel-note">Listing and content problems reported by users</p></div></div>
-        <div class="table-wrap"><table><thead><tr><th>Location</th><th>Issue</th><th>Submitted</th><th>Action</th></tr></thead><tbody id="reportsBody"><tr><td colspan="4" class="loading">Loading…</td></tr></tbody></table></div>
-      </section>
-    </div>
-
-    <section class="panel" id="locationsPanel">
-      <div class="panel-header section-toggle" id="locationsToggle"><div><h2 class="panel-title">⌖ All locations</h2><p class="panel-note">Ratings, tips, and location-level controls</p></div><span class="toggle-arrow" id="locationsArrow">▾</span></div>
-      <div id="locationsSection"><div class="search-row"><input type="search" id="filterBox" placeholder="Search name, address, or store number…"></div><div class="table-wrap"><table><thead><tr><th>Location</th><th id="th-store" style="cursor:pointer">Store ⇅</th><th id="th-bathroom" style="cursor:pointer">Bathroom ⇅</th><th id="th-reviews" style="cursor:pointer">Ratings ⇅</th><th>Tips</th><th>Actions</th></tr></thead><tbody id="tableBody"><tr><td colspan="6" class="loading">Loading data from Firestore…</td></tr></tbody></table></div></div>
     </section>
 
-    <section class="panel" id="namesPanel">
-      <div class="panel-header section-toggle" id="namesToggle"><div><h2 class="panel-title">♛ Leaderboard names</h2><p class="panel-note">Review claimed and reported display names</p></div><span class="toggle-arrow" id="namesArrow">▾</span></div>
-      <div id="namesSection"><div class="panel-body padded"><p class="panel-note">Release a stuck or inappropriate name so it can be claimed again.</p></div><div class="table-wrap"><table><thead><tr><th>Name</th><th>Claimed</th><th>Action</th></tr></thead><tbody id="namesBody"><tr><td colspan="3" class="loading">Loading…</td></tr></tbody></table></div><div class="panel-header"><div><h3 class="panel-title">Reported names</h3></div></div><div class="table-wrap"><table><thead><tr><th>Name</th><th>Reported</th><th>Action</th></tr></thead><tbody id="nameReportsBody"><tr><td colspan="3" class="loading">Loading…</td></tr></tbody></table></div></div>
+    <section class="page-view" data-view="locations">
+      <section class="panel" id="locationsPanel"><div class="panel-header"><div><h2 class="panel-title">All locations</h2><p class="panel-note">Search ratings, tips, and location-level controls</p></div></div><div class="search-row"><input type="search" id="filterBox" placeholder="Search name, address, or store number…"></div><div class="table-wrap"><table><thead><tr><th>Location</th><th id="th-store" style="cursor:pointer">Store ⇅</th><th id="th-bathroom" style="cursor:pointer">Bathroom ⇅</th><th id="th-reviews" style="cursor:pointer">Ratings ⇅</th><th>Tips</th><th>Actions</th></tr></thead><tbody id="tableBody"><tr><td colspan="6" class="loading">Loading…</td></tr></tbody></table></div></section>
+    </section>
+
+    <section class="page-view" data-view="tips">
+      <section class="panel"><div class="panel-header"><div><h2 class="panel-title">Tips moderation</h2><p class="panel-note">Search, correct spelling, or remove public tips</p></div></div><div class="tips-toolbar"><input id="tipsFilter" type="search" placeholder="Search tips or locations…"></div><div id="tipsList" class="tips-list"><div class="empty-state">Loading…</div></div></section>
+    </section>
+
+    <section class="page-view" data-view="requests">
+      <section class="panel"><div class="panel-header"><div><h2 class="panel-title">Location requests</h2><p class="panel-note">Suggested missing locations waiting for review</p></div></div><div class="table-wrap"><table><thead><tr><th>Description</th><th>Submitted</th><th>Action</th></tr></thead><tbody id="missingBody"><tr><td colspan="3" class="loading">Loading…</td></tr></tbody></table></div></section>
+    </section>
+
+    <section class="page-view" data-view="leaderboard">
+      <section class="panel" id="namesPanel"><div class="panel-header"><div><h2 class="panel-title">Leaderboard names</h2><p class="panel-note">Review claimed and reported display names</p></div></div><div class="panel-body padded"><p class="panel-note">Release a stuck or inappropriate name so it can be claimed again.</p></div><div class="table-wrap"><table><thead><tr><th>Name</th><th>Claimed</th><th>Action</th></tr></thead><tbody id="namesBody"><tr><td colspan="3" class="loading">Loading…</td></tr></tbody></table></div><div class="panel-header"><div><h3 class="panel-title">Reported names</h3></div></div><div class="table-wrap"><table><thead><tr><th>Name</th><th>Reported</th><th>Action</th></tr></thead><tbody id="nameReportsBody"><tr><td colspan="3" class="loading">Loading…</td></tr></tbody></table></div></section>
     </section>
   </div>
 </main>
@@ -161,13 +183,18 @@ async function deleteTip(locId, tipText){
   }
 }
 
-async function dismissReport(reportId){
+async function updateReportStatus(reportId, status){
   try{
-    const {db, doc, deleteDoc} = await fb();
-    await deleteDoc(doc(db, 'reports', reportId));
+    const {db, doc, updateDoc} = await fb();
+    const note = prompt(status === 'resolved' ? 'Optional resolution note:' : status === 'dismissed' ? 'Optional dismissal reason:' : 'Optional note:') || '';
+    await updateDoc(doc(db, 'reports', reportId), {
+      status,
+      moderatorNote: note.trim(),
+      moderatedAt: Date.now()
+    });
     return true;
   }catch(e){
-    console.error('dismiss report failed', e);
+    console.error('update report status failed', e);
     return false;
   }
 }
@@ -254,6 +281,9 @@ async function editTip(locId, oldText, newText){
 }
 
 let allRows = [];
+let allReports = [];
+let allMissing = [];
+let reportFilter = 'pending';
 let isLoading = false;
 let adminAuthorized = false;
 
@@ -344,31 +374,22 @@ async function loadAll(){
   }
 
   const reportsSnap = await getDocs(collection(db, 'reports'));
-  const reports = [];
-  reportsSnap.forEach(d => reports.push({ id: d.id, ...d.data() }));
-  reports.sort((a, b) => (b.ts || 0) - (a.ts || 0));
-  document.getElementById('statReports').textContent = reports.length;
-  const reportsBody = document.getElementById('reportsBody');
-  if(reports.length === 0){
-    reportsBody.innerHTML = '<tr><td colspan="4" class="loading">No reports yet.</td></tr>';
-  } else {
-    reportsBody.innerHTML = reports.map(r => {
-      const when = r.ts ? new Date(r.ts).toLocaleString() : '—';
-      return `<tr>
-        <td><b>${escapeHtml(r.locName || '')}</b><br><span style="color:#999;">${escapeHtml(r.addr || '')}</span></td>
-        <td>${escapeHtml(r.reason || '')}</td>
-        <td style="color:#999;">${when}</td>
-        <td><button class="dismiss-report-btn" data-reportid="${r.id}" style="background:#444;color:#fff;border:none;border-radius:6px;padding:5px 10px;font-size:12px;cursor:pointer;">✕ Dismiss</button></td>
-      </tr>`;
-    }).join('');
-  }
+  allReports = [];
+  reportsSnap.forEach(d => allReports.push({ id: d.id, status: 'pending', ...d.data() }));
+  allReports.sort((a, b) => (b.ts || 0) - (a.ts || 0));
+  const pendingCount = allReports.filter(r => (r.status || 'pending') === 'pending').length;
+  document.getElementById('statReports').textContent = pendingCount;
+  document.getElementById('navReports').textContent = pendingCount;
+  renderReports();
 
   try{
     const missingSnap = await getDocs(collection(db, 'missingReports'));
     const missingList = [];
     missingSnap.forEach(d => missingList.push({ id: d.id, ...d.data() }));
+    allMissing = missingList;
     missingList.sort((a, b) => (b.ts || 0) - (a.ts || 0));
     document.getElementById('statMissing').textContent = missingList.length;
+    document.getElementById('navMissing').textContent = missingList.length;
     const missingBody = document.getElementById('missingBody');
     if(missingList.length === 0){
       missingBody.innerHTML = '<tr><td colspan="3" class="loading">No missing-location tips yet.</td></tr>';
@@ -392,6 +413,8 @@ async function loadAll(){
   }
 
   refreshTable();
+  renderTipsPage();
+  renderDashboard();
   }catch(e){
     console.error('Admin data failed to load', e);
     showGlobalError('Could not load the admin dashboard. Check your connection and Firestore permissions.');
@@ -401,6 +424,55 @@ async function loadAll(){
   }
 }
 
+function formatWhen(ts){ return ts ? new Date(ts).toLocaleString() : 'Unknown time'; }
+function statusClass(status){ return status === 'resolved' ? 'status-resolved' : status === 'dismissed' ? 'status-dismissed' : 'status-pending'; }
+function reportType(r){ return r.type || r.category || r.reason || 'Other issue'; }
+function renderReports(){
+  const root = document.getElementById('reportsCards');
+  if(!root) return;
+  const rows = reportFilter === 'all' ? allReports : allReports.filter(r => (r.status || 'pending') === reportFilter);
+  if(!rows.length){ root.innerHTML = `<div class="empty-state">No ${reportFilter === 'all' ? '' : reportFilter + ' '}reports.</div>`; return; }
+  root.innerHTML = rows.map(r => {
+    const status = r.status || 'pending';
+    const details = r.details || r.description || r.suggestedCorrection || r.reason || '';
+    const loc = r.locName || r.locationName || r.appArea || 'BathroomReport';
+    const address = r.addr || r.address || '';
+    return `<article class="report-card">
+      <div class="report-head"><div><div class="report-type">${escapeHtml(reportType(r))}</div><div class="report-location">${escapeHtml(loc)}${address ? ' · ' + escapeHtml(address) : ''}</div></div><span class="status-pill ${statusClass(status)}">${escapeHtml(status)}</span></div>
+      <div class="report-copy">${escapeHtml(details)}</div>
+      ${r.moderatorNote ? `<div class="activity-meta"><b>Moderator note:</b> ${escapeHtml(r.moderatorNote)}</div>` : ''}
+      <div class="report-foot"><span class="activity-meta">Submitted ${formatWhen(r.ts)}</span><div class="report-actions">
+      ${status !== 'pending' ? `<button class="mini-btn reopen report-status-btn" data-reportid="${r.id}" data-status="pending">Reopen</button>` : ''}
+      ${status !== 'resolved' ? `<button class="mini-btn resolve report-status-btn" data-reportid="${r.id}" data-status="resolved">Resolve</button>` : ''}
+      ${status !== 'dismissed' ? `<button class="mini-btn dismiss report-status-btn" data-reportid="${r.id}" data-status="dismissed">Dismiss</button>` : ''}
+      </div></div></article>`;
+  }).join('');
+}
+function renderTipsPage(){
+  const root = document.getElementById('tipsList'); if(!root) return;
+  const q = (document.getElementById('tipsFilter')?.value || '').trim().toLowerCase();
+  const tips = [];
+  allRows.forEach(r => r.tips.forEach((text, i) => tips.push({text, loc:r.loc, index:i})));
+  const filtered = tips.filter(t => !q || t.text.toLowerCase().includes(q) || t.loc.n.toLowerCase().includes(q) || t.loc.addr.toLowerCase().includes(q));
+  if(!filtered.length){ root.innerHTML='<div class="empty-state">No matching tips.</div>'; return; }
+  root.innerHTML=filtered.map(t=>`<div class="tip-row"><div class="tip-copy">💡 ${escapeHtml(t.text)}</div><div><div class="tip-location"><b>${escapeHtml(t.loc.n)}</b><br>${escapeHtml(t.loc.addr)}</div></div><div class="report-actions"><button class="mini-btn tip-page-edit" data-locid="${t.loc.id}" data-tip="${encodeURIComponent(t.text)}">Edit</button><button class="mini-btn danger tip-page-delete" data-locid="${t.loc.id}" data-tip="${encodeURIComponent(t.text)}">Delete</button></div></div>`).join('');
+}
+function activityItem(icon,title,meta,time=''){
+  return `<div class="activity-item"><div class="activity-icon">${icon}</div><div><div class="activity-title">${escapeHtml(title)}</div><div class="activity-meta">${escapeHtml(meta)}</div></div><div class="activity-time">${time}</div></div>`;
+}
+function renderDashboard(){
+  const pending=allReports.filter(r=>(r.status||'pending')==='pending').slice(0,5);
+  document.getElementById('dashboardReports').innerHTML=pending.length?pending.map(r=>activityItem('⚑',reportType(r),`${r.locName||r.appArea||'BathroomReport'} · ${r.reason||r.description||''}`,r.ts?new Date(r.ts).toLocaleDateString():'' )).join(''):'<div class="empty-state">No pending reports.</div>';
+  const tipItems=[]; allRows.forEach(r=>r.tips.forEach(t=>tipItems.push({t,loc:r.loc}))); tipItems.reverse();
+  document.getElementById('dashboardTips').innerHTML=tipItems.length?tipItems.slice(0,5).map(x=>activityItem('💡',x.t,x.loc.n)).join(''):'<div class="empty-state">No tips yet.</div>';
+  const active=[...allRows].sort((a,b)=>((b.agg.storeCount||0)+(b.agg.bathroomCount||0))-((a.agg.storeCount||0)+(a.agg.bathroomCount||0))).slice(0,6);
+  document.getElementById('activeLocations').innerHTML=active.map(r=>activityItem('⌖',r.loc.n,`${(r.agg.storeCount||0)+(r.agg.bathroomCount||0)} ratings · ${r.tips.length} tips`)).join('');
+  const events=[];
+  allReports.slice(0,4).forEach(r=>events.push({ts:r.ts||0,html:activityItem('⚑',reportType(r),r.locName||r.appArea||'BathroomReport',r.ts?new Date(r.ts).toLocaleDateString():'')}));
+  allMissing.slice(0,3).forEach(m=>events.push({ts:m.ts||0,html:activityItem('＋','Location requested',m.description||'New location submission',m.ts?new Date(m.ts).toLocaleDateString():'')}));
+  tipItems.slice(0,3).forEach(x=>events.push({ts:0,html:activityItem('💡','Tip submitted',`${x.loc.n}: ${x.t}`)}));
+  document.getElementById('recentActivity').innerHTML=events.sort((a,b)=>b.ts-a.ts).slice(0,8).map(e=>e.html).join('')||'<div class="empty-state">No recent activity.</div>';
+}
 function renderTable(rows){
   const body = document.getElementById('tableBody');
   if(rows.length === 0){
@@ -573,22 +645,11 @@ Type the full location name exactly to continue:`
   }
 });
 
-document.getElementById('reportsBody').addEventListener('click', async (e) => {
-  const btn = e.target.closest('.dismiss-report-btn');
-  if(!btn) return;
-  const reportId = btn.dataset.reportid;
-  btn.disabled = true;
-  btn.textContent = '...';
-  const ok = await dismissReport(reportId);
-  if(ok){
-    btn.closest('tr').remove();
-    const statEl = document.getElementById('statReports');
-    statEl.textContent = Math.max(0, parseInt(statEl.textContent || '0', 10) - 1);
-  } else {
-    alert('Could not dismiss — try again.');
-    btn.disabled = false;
-    btn.textContent = '✕ Dismiss';
-  }
+document.getElementById('reportsCards').addEventListener('click', async (e) => {
+  const btn=e.target.closest('.report-status-btn'); if(!btn) return;
+  btn.disabled=true; const ok=await updateReportStatus(btn.dataset.reportid,btn.dataset.status);
+  if(ok){ const r=allReports.find(x=>x.id===btn.dataset.reportid); if(r){r.status=btn.dataset.status;r.moderatedAt=Date.now();} renderReports(); renderDashboard(); const pending=allReports.filter(x=>(x.status||'pending')==='pending').length; document.getElementById('statReports').textContent=pending; document.getElementById('navReports').textContent=pending; }
+  else { alert('Could not update report — try again.'); btn.disabled=false; }
 });
 
 document.getElementById('namesBody').addEventListener('click', async (e) => {
@@ -655,6 +716,9 @@ document.getElementById('missingBody').addEventListener('click', async (e) => {
   const ok = await dismissMissing(missingId);
   if(ok){
     btn.closest('tr').remove();
+    allMissing = allMissing.filter(m => m.id !== missingId);
+    renderDashboard();
+    document.getElementById('navMissing').textContent = allMissing.length;
     const statEl = document.getElementById('statMissing');
     statEl.textContent = Math.max(0, parseInt(statEl.textContent || '0', 10) - 1);
   } else {
@@ -664,22 +728,16 @@ document.getElementById('missingBody').addEventListener('click', async (e) => {
   }
 });
 
-// Leaderboard Names section starts collapsed to save space — it's an occasional-use tool
-document.getElementById('namesSection').classList.add('collapsed');
-document.getElementById('namesToggle').addEventListener('click', () => {
-  const section = document.getElementById('namesSection');
-  const arrow = document.getElementById('namesArrow');
-  const collapsed = section.classList.toggle('collapsed');
-  arrow.textContent = collapsed ? '▸' : '▾';
-});
+// ---- Admin navigation ----
+const pageMeta={dashboard:['Dashboard','A quick view of what is happening across BathroomReport.'],reports:['Reports','Review app and location-data issues by status.'],locations:['Locations','Manage location ratings, tips, and data.'],tips:['Tips','Correct spelling or remove public tips.'],requests:['Location requests','Review suggested missing locations.'],leaderboard:['Leaderboard','Manage claimed and reported display names.']};
+function showPage(page){ document.querySelectorAll('.page-view').forEach(v=>v.classList.toggle('active',v.dataset.view===page)); document.querySelectorAll('.nav-link').forEach(n=>n.classList.toggle('active',n.dataset.page===page)); const meta=pageMeta[page]||pageMeta.dashboard; document.getElementById('pageHeading').textContent=meta[0]; document.getElementById('pageSubheading').textContent=meta[1]; window.scrollTo({top:0,behavior:'smooth'});}
+document.querySelectorAll('.nav-link[data-page]').forEach(btn=>btn.addEventListener('click',()=>showPage(btn.dataset.page)));
+document.addEventListener('click',e=>{const go=e.target.closest('[data-go]');if(go)showPage(go.dataset.go)});
+document.querySelectorAll('.status-tab').forEach(btn=>btn.addEventListener('click',()=>{document.querySelectorAll('.status-tab').forEach(x=>x.classList.remove('active'));btn.classList.add('active');reportFilter=btn.dataset.status;renderReports();}));
+document.getElementById('tipsFilter').addEventListener('input',renderTipsPage);
+document.getElementById('tipsList').addEventListener('click',async e=>{const edit=e.target.closest('.tip-page-edit');const del=e.target.closest('.tip-page-delete');const btn=edit||del;if(!btn)return;const locId=btn.dataset.locid,oldText=decodeURIComponent(btn.dataset.tip);if(edit){const newText=(prompt('Edit tip:',oldText)||'').trim().slice(0,50);if(!newText||newText===oldText)return;btn.disabled=true;const ok=await editTip(locId,oldText,newText);if(ok){const row=allRows.find(r=>r.loc.id===locId);if(row)row.tips=row.tips.map(t=>t===oldText?newText:t);renderTipsPage();refreshTable();renderDashboard();}else{alert('Could not save — try again.');btn.disabled=false;}}else{if(!confirm(`Delete this tip?
 
-// All Locations starts expanded (it's the main table), but can be collapsed too
-document.getElementById('locationsToggle').addEventListener('click', () => {
-  const section = document.getElementById('locationsSection');
-  const arrow = document.getElementById('locationsArrow');
-  const collapsed = section.classList.toggle('collapsed');
-  arrow.textContent = collapsed ? '▸' : '▾';
-});
+"${oldText}"`))return;btn.disabled=true;const ok=await deleteTip(locId,oldText);if(ok){const row=allRows.find(r=>r.loc.id===locId);if(row)row.tips=row.tips.filter(t=>t!==oldText);renderTipsPage();refreshTable();renderDashboard();}else{alert('Could not delete — try again.');btn.disabled=false;}}});
 
 // ---- Admin authentication gate ----
 const loginGate = document.getElementById('loginGate');
