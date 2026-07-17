@@ -149,6 +149,7 @@ setTimeout(() => map.invalidateSize(), 300); // catch any late layout shifts rig
 // Hide the floating buttons while a popup is open so they never overlap its content
 map.on('popupopen', () => {
   document.getElementById('locateBtn').style.display = 'none';
+  document.getElementById('whereAmIBtn').style.display = 'none';
   document.getElementById('nearestInfo').style.display = 'none';
   document.getElementById('missingBtn').style.display = 'none';
   document.getElementById('missingPanel').classList.remove('show');
@@ -159,6 +160,7 @@ map.on('popupopen', () => {
 });
 map.on('popupclose', () => {
   document.getElementById('locateBtn').style.display = '';
+  document.getElementById('whereAmIBtn').style.display = '';
   document.getElementById('missingBtn').style.display = '';
   document.getElementById('topLeftControls').style.display = '';
   document.getElementById('openNowToggle').style.display = '';
@@ -1322,7 +1324,11 @@ async function loadAllRatings(){
     }
   }));
   updateMostRecentBadge();
-  updateMyProgressBadge();
+  updateOpenNowBadge();
+  updateTotalCoverageBadge();
+  updateMostReviewedBadge();
+  updateHighestRatedBadge();
+  updateLocationBasedBadges();
   checkAndUnlockAchievements();
   maybeShowSupportPrompt();
   map.invalidateSize(); // header height just changed (badges filled in) — tell Leaflet to recalculate
@@ -1538,21 +1544,176 @@ function renderBathroomPassport(stats, results){
   }
 }
 
-// Simple personal progress — how many of the total locations you've rated, no tiers/gamification
-function updateMyProgressBadge(){
-  const el = document.getElementById('myProgressBadge');
+// Live count of currently-open locations (within the selected chains) — replaces the
+// old personal "shops rated" progress badge, which nagged rather than informed.
+function updateOpenNowBadge(){
+  const el = document.getElementById('openNowBadge');
   if(!el) return;
-  let count = 0;
-  for(const id in myVoteCache){
-    const v = myVoteCache[id];
-    if(v && (v.store > 0 || v.bathroom > 0)) count++;
-  }
-  const total = seedLocations.length;
-  const remaining = total - count;
-  el.textContent = count === 0
-    ? `📍 0 of ${total} Shops rated — ${total} to go`
-    : `📍 ${count} of ${total} Shops rated — ${remaining} to go`;
+  const relevant = seedLocations.filter(loc => activeChains.has(loc.chain || DEFAULT_CHAIN_KEY));
+  const openCount = relevant.filter(loc => isLocationOpenNow(loc) === true).length;
+  el.textContent = `🟢 ${openCount} open right now`;
   refreshStatTicker();
+}
+
+// Static-ish community stats — cheap to compute from data we already have in memory,
+// no location permission needed, so these are always available.
+function updateTotalCoverageBadge(){
+  const el = document.getElementById('totalCoverageBadge');
+  if(!el) return;
+  el.textContent = `🗺️ ${seedLocations.length} locations on the map`;
+  refreshStatTicker();
+}
+
+function updateMostReviewedBadge(){
+  const el = document.getElementById('mostReviewedBadge');
+  if(!el) return;
+  let best = null, bestCount = 0;
+  seedLocations.forEach(loc => {
+    const agg = ratingsCache[loc.id];
+    if(agg && agg.bathroomCount > bestCount){ bestCount = agg.bathroomCount; best = loc; }
+  });
+  if(!best || bestCount === 0){ el.textContent = ''; el.onclick = null; refreshStatTicker(); return; }
+  el.textContent = `🔥 Most reviewed: ${best.n} (${bestCount})`;
+  el.onclick = () => zoomToMarker(markers[best.id]);
+  refreshStatTicker();
+}
+
+// Requires a handful of ratings before a location can claim "highest rated" — otherwise
+// a single 5-star vote on an obscure spot would win by default, which isn't meaningful.
+const HIGHEST_RATED_MIN_VOTES = 5;
+function updateHighestRatedBadge(){
+  const el = document.getElementById('highestRatedBadge');
+  if(!el) return;
+  let best = null, bestAvg = 0;
+  seedLocations.forEach(loc => {
+    const agg = ratingsCache[loc.id];
+    if(!agg || agg.bathroomCount < HIGHEST_RATED_MIN_VOTES) return;
+    const avg = agg.bathroomSum / agg.bathroomCount;
+    if(avg > bestAvg){ bestAvg = avg; best = loc; }
+  });
+  if(!best){ el.textContent = ''; el.onclick = null; refreshStatTicker(); return; }
+  el.textContent = `🏆 Highest rated: ${best.n} (${bestAvg.toFixed(1)}★)`;
+  el.onclick = () => zoomToMarker(markers[best.id]);
+  refreshStatTicker();
+}
+
+// Location-based stats — these only ever appear if the browser already reports geolocation
+// permission as granted. We never prompt for this ourselves; permission only gets requested
+// when someone taps "Where Am I?" or "Bathroom Now", and once granted, these fill in silently.
+async function getSilentLocationIfGranted(){
+  if(lastKnownPos && (Date.now() - lastKnownPos.ts) < 5 * 60 * 1000) return lastKnownPos;
+  if(!navigator.permissions || !navigator.geolocation) return null;
+  const withTimeout = (promise, ms) => Promise.race([
+    promise,
+    new Promise((resolve) => setTimeout(() => resolve(null), ms))
+  ]);
+  try{
+    const status = await withTimeout(navigator.permissions.query({ name: 'geolocation' }), 2000);
+    if(!status || status.state !== 'granted') return null;
+  }catch(e){ return null; }
+  return withTimeout(new Promise((resolve) => {
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        lastKnownPos = { lat: pos.coords.latitude, lng: pos.coords.longitude, ts: Date.now() };
+        resolve(lastKnownPos);
+      },
+      () => resolve(null),
+      { maximumAge: 300000, timeout: 5000 }
+    );
+  }), 6000);
+}
+
+async function updateLocationBasedBadges(){
+  const nearestEl = document.getElementById('nearestBathroomBadge');
+  const topRatedNearbyEl = document.getElementById('topRatedNearbyBadge');
+  const closingSoonEl = document.getElementById('closingSoonBadge');
+  const accessibleNearbyEl = document.getElementById('accessibleNearbyBadge');
+  const pos = await getSilentLocationIfGranted();
+
+  if(!pos){
+    // No permission yet — leave these blank rather than prompting or showing stale data.
+    [nearestEl, topRatedNearbyEl, closingSoonEl, accessibleNearbyEl].forEach(el => {
+      if(el){ el.textContent = ''; el.onclick = null; }
+    });
+    refreshStatTicker();
+    return;
+  }
+
+  const NEARBY_RADIUS_MILES = 10;
+  const nearby = seedLocations
+    .map(loc => ({ loc, d: milesBetween(pos.lat, pos.lng, loc.lat, loc.lng) }))
+    .filter(x => x.d <= NEARBY_RADIUS_MILES)
+    .sort((a, b) => a.d - b.d);
+
+  // Nearest bathroom (any open/unknown-hours location, closest first)
+  const nearestOpen = nearby.find(x => isLocationOpenNow(x.loc) !== false) || nearby[0];
+  if(nearestEl){
+    if(nearestOpen){
+      nearestEl.textContent = `📏 Nearest: ${nearestOpen.loc.n} (${nearestOpen.d.toFixed(1)} mi)`;
+      nearestEl.onclick = () => zoomToMarker(markers[nearestOpen.loc.id]);
+    } else { nearestEl.textContent = ''; nearestEl.onclick = null; }
+  }
+
+  // Top rated among nearby locations
+  if(topRatedNearbyEl){
+    let best = null, bestAvg = 0;
+    nearby.forEach(x => {
+      const agg = ratingsCache[x.loc.id];
+      if(!agg || agg.bathroomCount === 0) return;
+      const avg = agg.bathroomSum / agg.bathroomCount;
+      if(avg > bestAvg){ bestAvg = avg; best = x.loc; }
+    });
+    if(best){
+      topRatedNearbyEl.textContent = `⭐ Best nearby: ${best.n} (${bestAvg.toFixed(1)}★)`;
+      topRatedNearbyEl.onclick = () => zoomToMarker(markers[best.id]);
+    } else { topRatedNearbyEl.textContent = ''; topRatedNearbyEl.onclick = null; }
+  }
+
+  // Closing within the hour, nearby
+  if(closingSoonEl){
+    let soonest = null, soonestMins = Infinity;
+    nearby.forEach(x => {
+      const mins = minutesUntilClose(x.loc);
+      if(mins !== null && mins >= 0 && mins <= 60 && mins < soonestMins){
+        soonestMins = mins; soonest = x.loc;
+      }
+    });
+    if(soonest){
+      closingSoonEl.textContent = `🕐 Closing soon: ${soonest.n} (${soonestMins} min)`;
+      closingSoonEl.onclick = () => zoomToMarker(markers[soonest.id]);
+    } else { closingSoonEl.textContent = ''; closingSoonEl.onclick = null; }
+  }
+
+  // Confirmed-accessible locations nearby
+  if(accessibleNearbyEl){
+    try{
+      const accessibleIds = await loadAccessibleLocIds();
+      const count = nearby.filter(x => accessibleIds.has(x.loc.id)).length;
+      accessibleNearbyEl.textContent = count > 0
+        ? `♿ ${count} accessible nearby`
+        : '';
+    }catch(e){ accessibleNearbyEl.textContent = ''; }
+  }
+
+  refreshStatTicker();
+}
+
+// Minutes until a location's listed hours say it closes, or null if hours are unknown/24hr.
+// Handles overnight closes (e.g. "1800-0200") by rolling the close time into tomorrow.
+function minutesUntilClose(loc){
+  if(!loc.hrs || loc.hrs === '24') return null;
+  const parts = loc.hrs.split('-');
+  if(parts.length !== 2) return null;
+  const open = parseInt(parts[0], 10);
+  const close = parseInt(parts[1], 10);
+  if(isNaN(open) || isNaN(close)) return null;
+  const now = new Date();
+  const nowMins = now.getHours() * 60 + now.getMinutes();
+  let closeMins = Math.floor(close / 100) * 60 + (close % 100);
+  if(close <= open) closeMins += 24 * 60; // overnight — closes "tomorrow" relative to open
+  if(closeMins < nowMins) closeMins += 24 * 60; // already past midnight relative to now
+  const diff = closeMins - nowMins;
+  return diff <= 24 * 60 ? diff : null;
 }
 
 // Auto-rotating ticker — cycles through whichever stat pills currently have content, one at
@@ -1560,7 +1721,7 @@ function updateMyProgressBadge(){
 let statTickerIndex = 0;
 let statTickerInterval = null;
 function refreshStatTicker(){
-  const pills = ['myProgressBadge', 'weeklyRecap', 'mostRecentBadge']
+  const pills = ['openNowBadge', 'weeklyRecap', 'mostRecentBadge', 'totalCoverageBadge', 'mostReviewedBadge', 'highestRatedBadge', 'nearestBathroomBadge', 'topRatedNearbyBadge', 'closingSoonBadge', 'accessibleNearbyBadge']
     .map(id => document.getElementById(id))
     .filter(el => el && el.textContent.trim() !== '');
   pills.forEach(el => el.classList.remove('ticker-active'));
@@ -1571,7 +1732,7 @@ function refreshStatTicker(){
   if(statTickerInterval) clearInterval(statTickerInterval);
   if(pills.length > 1){
     statTickerInterval = setInterval(() => {
-      const activePills = ['myProgressBadge', 'weeklyRecap', 'mostRecentBadge']
+      const activePills = ['openNowBadge', 'weeklyRecap', 'mostRecentBadge', 'totalCoverageBadge', 'mostReviewedBadge', 'highestRatedBadge', 'nearestBathroomBadge', 'topRatedNearbyBadge', 'closingSoonBadge', 'accessibleNearbyBadge']
         .map(id => document.getElementById(id))
         .filter(el => el && el.textContent.trim() !== '');
       if(activePills.length === 0) return;
@@ -1712,7 +1873,9 @@ function attachStarHandlers(loc){
         }
 
         if(markers[loc.id]) markers[loc.id].setIcon(makeIcon(loc.id));
-        updateMyProgressBadge();
+        updateMostReviewedBadge();
+        updateHighestRatedBadge();
+        updateLocationBasedBadges();
         checkAndUnlockAchievements();
       });
     });
@@ -1976,6 +2139,7 @@ document.getElementById('chainFilterBody')?.addEventListener('change', (e) => {
   }
   saveDisabledChains();
   applyFilters();
+  updateOpenNowBadge();
 });
 
 // Collapsible chain filter panel — same remembered-collapse pattern as the legend
@@ -2296,6 +2460,50 @@ function bathroomNowCard(result,fallback=false){
 let userMarker=null;
 const locateBtn=document.getElementById('locateBtn'),nearestInfo=document.getElementById('nearestInfo');
 let suppressNextLocateClick=false;
+
+// Where Am I? — just centers the map on the user's current position, no bathroom search.
+const whereAmIBtn = document.getElementById('whereAmIBtn');
+function dropUserMarker(lat, lng){
+  if(userMarker) map.removeLayer(userMarker);
+  userMarker = L.marker([lat, lng], {
+    icon: L.divIcon({
+      className: '',
+      html: '<div style="background:#2196f3;width:16px;height:16px;border-radius:50%;border:3px solid #fff;box-shadow:0 0 6px rgba(0,0,0,.6);"></div>',
+      iconSize: [16, 16], iconAnchor: [8, 8]
+    })
+  }).addTo(map);
+}
+if(whereAmIBtn){
+  whereAmIBtn.addEventListener('click', () => {
+    if(!navigator.geolocation){
+      nearestInfo.style.display = 'block';
+      nearestInfo.textContent = "Your browser doesn't support location.";
+      return;
+    }
+    whereAmIBtn.disabled = true;
+    const originalLabel = whereAmIBtn.textContent;
+    whereAmIBtn.textContent = '📍 Locating…';
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        const lat = pos.coords.latitude, lng = pos.coords.longitude;
+        lastKnownPos = { lat, lng, ts: Date.now() };
+        dropUserMarker(lat, lng);
+        map.setView([lat, lng], Math.max(map.getZoom(), 14));
+        whereAmIBtn.disabled = false;
+        whereAmIBtn.textContent = originalLabel;
+        updateLocationBasedBadges();
+      },
+      () => {
+        whereAmIBtn.disabled = false;
+        whereAmIBtn.textContent = originalLabel;
+        nearestInfo.style.display = 'block';
+        nearestInfo.textContent = "Couldn't get your location — check your browser's location permission.";
+      },
+      { enableHighAccuracy: true, timeout: 10000 }
+    );
+  });
+}
+
 function showBathroomNowResult(result,fallback=false){
   nearestInfo.style.display='block'; nearestInfo.innerHTML=bathroomNowCard(result,fallback);
   document.getElementById('bathroom-now-close').onclick=()=>{ nearestInfo.style.display='none'; };
@@ -2309,8 +2517,8 @@ locateBtn.addEventListener('click',()=>{
   locateBtn.disabled=true;locateBtn.textContent='🚽 Finding bathroom…';nearestInfo.style.display='none';
   navigator.geolocation.getCurrentPosition(async pos=>{
     const user={lat:pos.coords.latitude,lng:pos.coords.longitude};lastKnownPos={...user,ts:Date.now()};currentListPosition=lastKnownPos;
-    if(userMarker)map.removeLayer(userMarker);
-    userMarker=L.marker([user.lat,user.lng],{icon:L.divIcon({className:'',html:'<div style="background:#2196f3;width:16px;height:16px;border-radius:50%;border:3px solid #fff;box-shadow:0 0 6px rgba(0,0,0,.6);"></div>',iconSize:[16,16],iconAnchor:[8,8]})}).addTo(map);
+    dropUserMarker(user.lat, user.lng);
+    updateLocationBasedBadges();
     // Prefer the selected chains, but don't strand someone far from their nearest pick —
     // if nothing selected is within a reasonable driving distance, widen to every chain
     // (still open-only) so the closest real option wins instead.
