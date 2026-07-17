@@ -155,9 +155,16 @@ button,input{font:inherit}button{touch-action:manipulation}a{color:var(--accent)
     </section>
   </div>
 </main>
-<script src="locations.js"></script>
+<script src="stewarts-locations.js"></script>
+<script src="cumberland-farms-locations.js"></script>
+<script src="wawa-locations.js"></script>
 <script>
-const seedLocations = window.seedLocations || [];
+// Same merge pattern as the public app's CHAIN_REGISTRY — locations.js was a stale,
+// Stewart's-only snapshot (311 entries) that never got updated when Cumberland Farms
+// and Wawa were added to the live map. This pulls from the same source files instead,
+// so FlushPanel's counts always match what's actually on the site.
+const CHAIN_DATA_VARS = ['stewartsLocations', 'cumberlandFarmsLocations', 'wawaLocations'];
+const seedLocations = CHAIN_DATA_VARS.reduce((all, key) => all.concat(window[key] || []), []);
 
 async function fb(){
   while(!window.__fb){ await new Promise(r => setTimeout(r, 20)); }
