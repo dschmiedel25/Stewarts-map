@@ -1502,6 +1502,20 @@ function renderBathroomPassport(stats, results){
       const r = results[def.key];
       const dateStr = r.unlockedAt ? new Date(r.unlockedAt).toLocaleDateString() : null;
       const progressStr = (!r.unlocked && r.total > 1) ? `${r.current} / ${r.total}` : '';
+      const hasProgress = r.unlocked || r.current > 0;
+
+      // PlayStation-style hidden trophy: zero progress means we don't reveal what the
+      // achievement is yet — just that one exists, waiting to be found.
+      if(!hasProgress){
+        return `<div class="achievement-card locked hidden-trophy">
+          <div class="achievement-icon">🔒</div>
+          <div class="achievement-info">
+            <div class="achievement-name">Hidden Trophy</div>
+            <div class="achievement-desc">Keep exploring to reveal this one</div>
+          </div>
+        </div>`;
+      }
+
       return `<div class="achievement-card ${r.unlocked ? 'unlocked' : 'locked'}">
         <div class="achievement-icon">${def.icon}</div>
         <div class="achievement-info">
@@ -1995,17 +2009,60 @@ document.getElementById('listViewClose').addEventListener('click',()=>{document.
 let activeLeaderboardTab = 'bathroom';
 
 async function openLeaderboard(){
-  // Leaderboard is being redone — show a "Hidden" placeholder instead of hitting the
-  // broken data fetch. Restore the block above (see git history / previous version)
-  // once the rebuild is ready, and delete this stub.
   document.getElementById('leaderboardPanel').classList.add('show');
-  document.getElementById('leaderboardAccountNote').innerHTML = '';
-  document.getElementById('leaderboardItems').innerHTML = `
-    <div style="padding:32px 16px;color:var(--muted);text-align:center;">
-      <div style="font-size:32px;margin-bottom:8px;">🔒</div>
-      <div style="font-weight:700;color:var(--cream);margin-bottom:4px;">Hidden</div>
-      <div style="font-size:12.5px;">🏆 Ranked by who's rated the most Shops — back once it's working right.</div>
-    </div>`;
+
+  const noteEl = document.getElementById('leaderboardAccountNote');
+  if(isLoggedIn()){
+    const username = (window.__currentUser.email || '').split('@')[0];
+    noteEl.innerHTML = `You're on the board as <b style="color:var(--amber);">${escapeHtml(username)}</b>. <button id="leaderboardPassportBtn" style="background:none;border:none;color:var(--amber);text-decoration:underline;font-size:12px;cursor:pointer;padding:0 0 0 4px;">🎫 Passport</button> · <button id="leaderboardLogoutBtn" style="background:none;border:none;color:#e57373;text-decoration:underline;font-size:12px;cursor:pointer;padding:0 0 0 4px;">Log out</button>`;
+    document.getElementById('leaderboardPassportBtn').addEventListener('click', () => {
+      document.getElementById('leaderboardPanel').classList.remove('show');
+      document.getElementById('accountPanel').classList.add('show');
+      updateAccountUI();
+      checkAndUnlockAchievements();
+    });
+    document.getElementById('leaderboardLogoutBtn').addEventListener('click', async () => {
+      await logOutAccount();
+      updateAccountUI();
+      loadAllRatings();
+      openLeaderboard(); // refresh this panel to reflect the logged-out state
+    });
+  } else {
+    noteEl.innerHTML = `<button class="btn btn-amber" id="leaderboardLoginPrompt" style="width:100%;">👤 Log in to appear on the leaderboard</button>`;
+    document.getElementById('leaderboardLoginPrompt').addEventListener('click', () => {
+      document.getElementById('leaderboardPanel').classList.remove('show');
+      document.getElementById('accountPanel').classList.add('show');
+      updateAccountUI();
+      checkAndUnlockAchievements();
+    });
+  }
+
+  const itemsEl = document.getElementById('leaderboardItems');
+  itemsEl.innerHTML = '<div style="padding:16px;color:#999;">Loading...</div>';
+  const ranked = await loadLeaderboard();
+  if(ranked === null){
+    itemsEl.innerHTML = '<div style="padding:16px;color:#999;">Could not load the leaderboard — try again.</div>';
+    return;
+  }
+  if(ranked.length === 0){
+    itemsEl.innerHTML = `<div style="padding:16px;color:#999;">No one's logged in and rated a shop yet — be the first!</div>`;
+    return;
+  }
+  itemsEl.innerHTML = ranked.map((r, i) =>
+    `<div class="leaderboard-row-wrap">
+      <div class="leaderboard-row" data-clientid="${r.clientId}">
+        <span class="leaderboard-rank">#${i+1}</span>
+        <div class="leaderboard-main">
+          <div class="leaderboard-name">${escapeHtml(r.name)}</div>
+        </div>
+        <span class="leaderboard-arrow" id="lb-arrow-${r.clientId}">▾</span>
+      </div>
+      <div class="leaderboard-breakdown" id="lb-breakdown-${r.clientId}">
+        <div>🚻 ${r.bathroomCount} bathroom${r.bathroomCount === 1 ? '' : 's'} rated</div>
+        <div>🏪 ${r.storeCount} store${r.storeCount === 1 ? '' : 's'} rated</div>
+      </div>
+    </div>`
+  ).join('');
 }
 
 document.getElementById('leaderboardToggle').addEventListener('click', openLeaderboard);
