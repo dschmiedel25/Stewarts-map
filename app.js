@@ -8,13 +8,12 @@
 // TO ADD A NEW CHAIN:
 //   1. Create <chain>-locations.js with `window.<chain>Locations = [...]`
 //      (same shape as stewarts-locations.js — n/lat/lng/addr/id/hrs).
-//   2. Add a <script src="<chain>-locations.js"></script> tag in index.html's
-//      <head>, alongside the other chain data files, before app.js loads.
+//   2. Add a <script src="<chain>-locations.js"></script> tag in index.html,
+//      right before app.js.
 //   3. Add one entry below with the chain's real brand color.
 const CHAIN_REGISTRY = {
   stewarts: { name: "Stewart's Shops", color: '#a51e36', textColor: '#ffffff', dataVar: 'stewartsLocations' },
-  cumberlandFarms: { name: "Cumberland Farms", color: '#009639', textColor: '#ffffff', dataVar: 'cumberlandFarmsLocations' },
-  wawa: { name: "Wawa", color: '#c8102e', textColor: '#ffffff', dataVar: 'wawaLocations' }
+  cumberlandFarms: { name: "Cumberland Farms", color: '#009639', textColor: '#ffffff', dataVar: 'cumberlandFarmsLocations' }
 };
 const DEFAULT_CHAIN_KEY = 'stewarts';
 
@@ -120,12 +119,6 @@ function positionSelectedMarker(marker, animate = false){
 function zoomToMarker(marker){
   if(!marker) return;
 
-  // The marker's chain may currently be hidden by the Chains filter (e.g. Bathroom Now
-  // or a search result pointing at a location outside the selected chains). Force it
-  // visible for this one lookup rather than silently failing to open — the normal filter
-  // reasserts itself next time applyFilters() runs (e.g. any checkbox change).
-  if(!markerCluster.hasLayer(marker)) markerCluster.addLayer(marker);
-
   map.setView(marker.getLatLng(), 16, { animate: false });
   positionSelectedMarker(marker, false);
   marker.openPopup();
@@ -152,7 +145,7 @@ map.on('popupopen', () => {
   document.getElementById('nearestInfo').style.display = 'none';
   document.getElementById('missingBtn').style.display = 'none';
   document.getElementById('missingPanel').classList.remove('show');
-  document.getElementById('topLeftControls').style.display = 'none';
+  document.getElementById('legendBody').classList.add('collapsed');
   document.getElementById('openNowToggle').style.display = 'none';
   document.getElementById('listViewToggle').style.display = 'none';
   document.getElementById('leaderboardToggle').style.display = 'none';
@@ -160,10 +153,11 @@ map.on('popupopen', () => {
 map.on('popupclose', () => {
   document.getElementById('locateBtn').style.display = '';
   document.getElementById('missingBtn').style.display = '';
-  document.getElementById('topLeftControls').style.display = '';
   document.getElementById('openNowToggle').style.display = '';
   document.getElementById('listViewToggle').style.display = '';
   document.getElementById('leaderboardToggle').style.display = '';
+  const wasCollapsed = localStorage.getItem('legendCollapsed') === '1';
+  if(!wasCollapsed) document.getElementById('legendBody').classList.remove('collapsed');
 });
 
 // Two tile sources now: satellite imagery for light mode, street map (with a CSS invert
@@ -897,8 +891,6 @@ function popupHtml(loc, agg, myVote){
         ? '<span style="color:#c62828;font-weight:700;">Closed now</span>'
         : '';
     hoursLine = `<div class="hours-line">🕐 ${hoursText}${statusHtml ? ' · ' + statusHtml : ''}</div>`;
-  } else {
-    hoursLine = `<div class="hours-line">🕐 Hours not listed for this store yet — know them? Tap 🚩 below to send them in.</div>`;
   }
   const recency = relativeTimeFromNow(agg.lastUpdated);
   const recencyLine = recency ? `<div class="hours-line">📝 Last rated ${recency}</div>` : '';
@@ -1895,97 +1887,13 @@ function applyFilters(){
     const m = markers[loc.id];
     if(!m) return;
     const openOk = !showOnlyOpenNow || isLocationOpenNow(loc) !== false; // null (unknown) counts as OK
-    const chainOk = activeChains.has(loc.chain || DEFAULT_CHAIN_KEY);
-    if(openOk && chainOk){
+    if(openOk){
       if(!markerCluster.hasLayer(m)) markerCluster.addLayer(m);
     } else {
       if(markerCluster.hasLayer(m)) markerCluster.removeLayer(m);
     }
   });
 }
-
-// Chain filter — lets people show/hide pins per chain when more than one is registered.
-// Selection persists across visits via localStorage, stored as a DENY-list (which chains
-// are turned off) rather than an allow-list. That way, a chain added later (like Wawa)
-// defaults to visible even if someone had already saved a preference before it existed —
-// an allow-list would silently hide any chain missing from an old saved selection.
-let disabledChains = new Set();
-(function(){
-  const saved = localStorage.getItem('disabledChains');
-  if(!saved) return;
-  try{
-    const savedArr = JSON.parse(saved);
-    if(Array.isArray(savedArr)) disabledChains = new Set(savedArr);
-  }catch(e){ /* malformed saved value — keep default of nothing disabled */ }
-})();
-
-function getActiveChains(){
-  return new Set(Object.keys(CHAIN_REGISTRY).filter(k => !disabledChains.has(k)));
-}
-let activeChains = getActiveChains();
-
-function saveDisabledChains(){
-  localStorage.setItem('disabledChains', JSON.stringify(Array.from(disabledChains)));
-}
-
-function renderChainFilter(){
-  const wrap = document.getElementById('chainFilter');
-  const body = document.getElementById('chainFilterBody');
-  if(!wrap || !body) return;
-  const chainKeys = Object.keys(CHAIN_REGISTRY);
-  if(chainKeys.length < 2){
-    // Only one chain registered — nothing meaningful to filter, so hide the control entirely
-    wrap.style.display = 'none';
-    return;
-  }
-  body.innerHTML = chainKeys.map(key => {
-    const chain = CHAIN_REGISTRY[key];
-    const checked = activeChains.has(key) ? 'checked' : '';
-    return `<label class="chain-filter-row">
-      <input type="checkbox" class="chain-filter-checkbox" data-chain="${key}" ${checked}>
-      <span class="dot" style="background:${chain.color}"></span>${escapeHtml(chain.name)}
-    </label>`;
-  }).join('');
-}
-
-document.getElementById('chainFilterBody')?.addEventListener('change', (e) => {
-  const cb = e.target.closest('.chain-filter-checkbox');
-  if(!cb) return;
-  const key = cb.dataset.chain;
-  if(cb.checked) disabledChains.delete(key); else disabledChains.add(key);
-  activeChains = getActiveChains();
-  // Never allow every chain to be switched off at once — that would just blank the map
-  if(activeChains.size === 0){
-    disabledChains.delete(key);
-    activeChains = getActiveChains();
-    cb.checked = true;
-  }
-  saveDisabledChains();
-  applyFilters();
-});
-
-// Collapsible chain filter panel — same remembered-collapse pattern as the legend
-(function(){
-  const toggle = document.getElementById('chainFilterToggle');
-  const body = document.getElementById('chainFilterBody');
-  const arrow = document.getElementById('chainFilterArrow');
-  if(!toggle || !body || !arrow) return;
-
-  function setCollapsed(collapsed){
-    body.classList.toggle('collapsed', collapsed);
-    arrow.style.transform = collapsed ? 'rotate(-90deg)' : 'rotate(0deg)';
-    localStorage.setItem('chainFilterCollapsed', collapsed ? '1' : '0');
-  }
-
-  const saved = localStorage.getItem('chainFilterCollapsed');
-  setCollapsed(saved === null ? true : saved === '1'); // collapsed by default so it doesn't crowd the legend
-
-  toggle.addEventListener('click', () => {
-    setCollapsed(!body.classList.contains('collapsed'));
-  });
-})();
-renderChainFilter();
-applyFilters();
 
 document.getElementById('openNowToggle').addEventListener('click', () => {
   showOnlyOpenNow = !showOnlyOpenNow;
@@ -2087,60 +1995,17 @@ document.getElementById('listViewClose').addEventListener('click',()=>{document.
 let activeLeaderboardTab = 'bathroom';
 
 async function openLeaderboard(){
+  // Leaderboard is being redone — show a "Hidden" placeholder instead of hitting the
+  // broken data fetch. Restore the block above (see git history / previous version)
+  // once the rebuild is ready, and delete this stub.
   document.getElementById('leaderboardPanel').classList.add('show');
-
-  const noteEl = document.getElementById('leaderboardAccountNote');
-  if(isLoggedIn()){
-    const username = (window.__currentUser.email || '').split('@')[0];
-    noteEl.innerHTML = `You're on the board as <b style="color:var(--amber);">${escapeHtml(username)}</b>. <button id="leaderboardPassportBtn" style="background:none;border:none;color:var(--amber);text-decoration:underline;font-size:12px;cursor:pointer;padding:0 0 0 4px;">🎫 Passport</button> · <button id="leaderboardLogoutBtn" style="background:none;border:none;color:#e57373;text-decoration:underline;font-size:12px;cursor:pointer;padding:0 0 0 4px;">Log out</button>`;
-    document.getElementById('leaderboardPassportBtn').addEventListener('click', () => {
-      document.getElementById('leaderboardPanel').classList.remove('show');
-      document.getElementById('accountPanel').classList.add('show');
-      updateAccountUI();
-      checkAndUnlockAchievements();
-    });
-    document.getElementById('leaderboardLogoutBtn').addEventListener('click', async () => {
-      await logOutAccount();
-      updateAccountUI();
-      loadAllRatings();
-      openLeaderboard(); // refresh this panel to reflect the logged-out state
-    });
-  } else {
-    noteEl.innerHTML = `<button class="btn btn-amber" id="leaderboardLoginPrompt" style="width:100%;">👤 Log in to appear on the leaderboard</button>`;
-    document.getElementById('leaderboardLoginPrompt').addEventListener('click', () => {
-      document.getElementById('leaderboardPanel').classList.remove('show');
-      document.getElementById('accountPanel').classList.add('show');
-      updateAccountUI();
-      checkAndUnlockAchievements();
-    });
-  }
-
-  const itemsEl = document.getElementById('leaderboardItems');
-  itemsEl.innerHTML = '<div style="padding:16px;color:#999;">Loading...</div>';
-  const ranked = await loadLeaderboard();
-  if(ranked === null){
-    itemsEl.innerHTML = '<div style="padding:16px;color:#999;">Could not load the leaderboard — try again.</div>';
-    return;
-  }
-  if(ranked.length === 0){
-    itemsEl.innerHTML = `<div style="padding:16px;color:#999;">No one's logged in and rated a shop yet — be the first!</div>`;
-    return;
-  }
-  itemsEl.innerHTML = ranked.map((r, i) =>
-    `<div class="leaderboard-row-wrap">
-      <div class="leaderboard-row" data-clientid="${r.clientId}">
-        <span class="leaderboard-rank">#${i+1}</span>
-        <div class="leaderboard-main">
-          <div class="leaderboard-name">${escapeHtml(r.name)}</div>
-        </div>
-        <span class="leaderboard-arrow" id="lb-arrow-${r.clientId}">▾</span>
-      </div>
-      <div class="leaderboard-breakdown" id="lb-breakdown-${r.clientId}">
-        <div>🚻 ${r.bathroomCount} bathroom${r.bathroomCount === 1 ? '' : 's'} rated</div>
-        <div>🏪 ${r.storeCount} store${r.storeCount === 1 ? '' : 's'} rated</div>
-      </div>
-    </div>`
-  ).join('');
+  document.getElementById('leaderboardAccountNote').innerHTML = '';
+  document.getElementById('leaderboardItems').innerHTML = `
+    <div style="padding:32px 16px;color:var(--muted);text-align:center;">
+      <div style="font-size:32px;margin-bottom:8px;">🔒</div>
+      <div style="font-weight:700;color:var(--cream);margin-bottom:4px;">Hidden</div>
+      <div style="font-size:12.5px;">🏆 Ranked by who's rated the most Shops — back once it's working right.</div>
+    </div>`;
 }
 
 document.getElementById('leaderboardToggle').addEventListener('click', openLeaderboard);
@@ -2274,17 +2139,13 @@ function bathroomNowCard(result,fallback=false){
   const agg=ratingsCache[result.loc.id]||emptyAgg(); const open=isLocationOpenNow(result.loc);
   const distance=Number.isFinite(result.distanceMiles)?`${result.distanceMiles.toFixed(1)} mi`:'Distance unavailable';
   const duration=Number.isFinite(result.durationMinutes)?` · ${Math.round(result.durationMinutes)} min`:'';
-  const hoursMissingNote=open===null?'<br><small>No hours listed for this store — tap "View pin" then 🚩 to send them in.</small>':'';
-  const outsideSelection=!activeChains.has(result.loc.chain || DEFAULT_CHAIN_KEY);
-  const chainNote=outsideSelection?`<br><small>Nothing close by in your selected chains, so this ${escapeHtml((CHAIN_REGISTRY[result.loc.chain]||{}).name||'nearby')} location is shown instead.</small>`:'';
-  return `<div class="bathroom-now-card"><button class="bathroom-now-close" id="bathroom-now-close" title="Close">✕</button><div class="now-title">🚽 ${fallback?'Closest location':'Closest bathroom by driving distance'}</div><b>${result.loc.n}</b><br>${distance}${duration}<br>${open===true?'🟢 Open now':open===false?'🔴 Closed now':'⚪ Hours unavailable'}<br>🚻 ${avgStr(agg.bathroomSum,agg.bathroomCount)}★ · ${agg.bathroomCount} rating${agg.bathroomCount===1?'':'s'}${fallback?'<br><small>Driving route unavailable; using straight-line distance.</small>':''}${hoursMissingNote}${chainNote}<div class="now-actions"><button class="btn btn-primary" id="bathroom-now-directions">🧭 Get Directions</button><button class="btn btn-secondary" id="bathroom-now-view">View pin</button></div></div>`;
+  return `<div class="bathroom-now-card"><div class="now-title">🚽 ${fallback?'Closest location':'Closest bathroom by driving distance'}</div><b>${result.loc.n}</b><br>${distance}${duration}<br>${open===true?'🟢 Open now':open===false?'🔴 Closed now':'⚪ Hours unavailable'}<br>🚻 ${avgStr(agg.bathroomSum,agg.bathroomCount)}★ · ${agg.bathroomCount} rating${agg.bathroomCount===1?'':'s'}${fallback?'<br><small>Driving route unavailable; using straight-line distance.</small>':''}<div class="now-actions"><button class="btn btn-primary" id="bathroom-now-directions">🧭 Get Directions</button><button class="btn btn-secondary" id="bathroom-now-view">View pin</button></div></div>`;
 }
 let userMarker=null;
 const locateBtn=document.getElementById('locateBtn'),nearestInfo=document.getElementById('nearestInfo');
 let suppressNextLocateClick=false;
 function showBathroomNowResult(result,fallback=false){
   nearestInfo.style.display='block'; nearestInfo.innerHTML=bathroomNowCard(result,fallback);
-  document.getElementById('bathroom-now-close').onclick=()=>{ nearestInfo.style.display='none'; };
   document.getElementById('bathroom-now-view').onclick=()=>zoomToMarker(markers[result.loc.id]);
   document.getElementById('bathroom-now-directions').onclick=()=>{const pref=localStorage.getItem('preferredNavApp')||'google';window.open(buildNavUrl(pref,result.loc.lat,result.loc.lng),'_blank','noopener');};
   zoomToMarker(markers[result.loc.id]);
@@ -2297,27 +2158,7 @@ locateBtn.addEventListener('click',()=>{
     const user={lat:pos.coords.latitude,lng:pos.coords.longitude};lastKnownPos={...user,ts:Date.now()};currentListPosition=lastKnownPos;
     if(userMarker)map.removeLayer(userMarker);
     userMarker=L.marker([user.lat,user.lng],{icon:L.divIcon({className:'',html:'<div style="background:#2196f3;width:16px;height:16px;border-radius:50%;border:3px solid #fff;box-shadow:0 0 6px rgba(0,0,0,.6);"></div>',iconSize:[16,16],iconAnchor:[8,8]})}).addTo(map);
-    // Prefer the selected chains, but don't strand someone far from their nearest pick —
-    // if nothing selected is within a reasonable driving distance, widen to every chain
-    // (still open-only) so the closest real option wins instead.
-    const CHAIN_FALLBACK_MILES = 20;
-    let eligible = seedLocations.filter(loc =>
-      activeChains.has(loc.chain || DEFAULT_CHAIN_KEY) && isLocationOpenNow(loc) !== false
-    );
-    const nearestSelectedMiles = eligible.reduce((min,loc) => {
-      const d = milesBetween(user.lat, user.lng, loc.lat, loc.lng);
-      return d < min ? d : min;
-    }, Infinity);
-    if(nearestSelectedMiles > CHAIN_FALLBACK_MILES){
-      eligible = seedLocations.filter(loc => isLocationOpenNow(loc) !== false);
-    }
-    const candidates=eligible.map(loc=>({loc,d:milesBetween(user.lat,user.lng,loc.lat,loc.lng)})).sort((a,b)=>a.d-b.d).slice(0,10).map(x=>x.loc);
-    if(!candidates.length){
-      locateBtn.disabled=false;locateBtn.textContent='🚽 Bathroom Now';
-      nearestInfo.style.display='block';
-      nearestInfo.textContent='No open bathrooms found nearby right now.';
-      return;
-    }
+    const candidates=[...seedLocations].map(loc=>({loc,d:milesBetween(user.lat,user.lng,loc.lat,loc.lng)})).sort((a,b)=>a.d-b.d).slice(0,10).map(x=>x.loc);
     try{
       const options=await getDrivingOptions(user,candidates);
       options.sort((a,b)=>{const rank=x=>isLocationOpenNow(x.loc)===true?0:isLocationOpenNow(x.loc)===null?1:2;return rank(a)-rank(b)||a.distanceMiles-b.distanceMiles;});

@@ -25,7 +25,6 @@
 <script type="module" src="firebase.js"></script>
 <script src="stewarts-locations.js"></script>
 <script src="cumberland-farms-locations.js"></script>
-<script src="wawa-locations.js"></script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@500;600;700&display=swap" rel="stylesheet">
@@ -62,7 +61,6 @@
 </div>
 
 <div id="mapWrap">
-<div id="topLeftControls">
 <div id="legend">
   <div id="legendToggle">🔑 Key <span id="legendArrow">▾</span></div>
   <div id="legendBody">
@@ -76,15 +74,9 @@
   </div>
 </div>
 
-<div id="chainFilter">
-  <div id="chainFilterToggle">🏪 Chains <span id="chainFilterArrow">▾</span></div>
-  <div id="chainFilterBody"></div>
-</div>
-</div>
-
 <button id="openNowToggle">🕐 Open now</button>
 <button id="listViewToggle">📋 List</button>
-<button id="leaderboardToggle">🏆 Leaderboard</button>
+<button id="leaderboardToggle">🏆 Hidden</button>
 
 <div id="map"></div>
 <button id="locateBtn" aria-label="Find the closest Stewart's bathroom by driving distance">🚽 Bathroom Now</button>
@@ -166,8 +158,8 @@
 </div>
 
 <div id="leaderboardPanel">
-  <div id="leaderboardHeader">
-    <span>🏆 Leaderboard</span>
+  <div id="listViewHeader">
+    <span>🏆 Hidden</span>
     <button id="leaderboardClose">✕</button>
   </div>
   <p style="padding:10px 16px 0;color:var(--muted);font-size:12px;font-style:italic;margin:0;">
@@ -181,7 +173,7 @@
 </div>
 
 <div id="accountPanel">
-  <div id="accountHeader">
+  <div id="listViewHeader">
     <span>👤 Account</span>
     <button id="accountClose">✕</button>
   </div>
@@ -210,11 +202,12 @@
     </div>
 
     <div id="passportSection">
-      <div class="account-section-title">🎫 Bathroom Passport</div>
+      <div class="account-section-title">🎫 Hidden</div>
+      <p style="color:var(--muted);font-size:12.5px;margin:0 0 8px;">Stamp-by-stamp tracking of every Stewart's you've visited — being rebuilt, back soon.</p>
       <p id="passportSyncNote" style="color:var(--muted);font-size:11.5px;margin:0 0 8px;display:none;">
         This is tracked on this device only — log in to sync it across devices.
       </p>
-      <div id="bathroomPassportBody"></div>
+      <div id="bathroomPassportBody" style="display:none;"></div>
     </div>
 
     <div id="achievementsSection">
@@ -224,7 +217,8 @@
   </div>
 </div>
 
-<!-- Chain data files load in <head> above, alongside stewarts-locations.js and cumberland-farms-locations.js; add a new chain's <script> tag there, then register it in app.js's CHAIN_REGISTRY -->
+<script src="stewarts-locations.js"></script>
+<!-- To add a chain: <script src="<chain>-locations.js"></script> here, then register it in app.js's CHAIN_REGISTRY -->
 <script src="app.js"></script>
 </body>
 </html>
