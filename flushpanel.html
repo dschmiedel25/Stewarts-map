@@ -833,7 +833,7 @@ Type the full location name exactly to continue:`
 document.getElementById('reportsCards').addEventListener('click', async (e) => {
   const btn=e.target.closest('.report-status-btn'); if(!btn) return;
   btn.disabled=true; const ok=await updateReportStatus(btn.dataset.reportid,btn.dataset.status);
-  if(ok){ const r=allReports.find(x=>x.id===btn.dataset.reportid); if(r){r.status=btn.dataset.status;r.moderatedAt=Date.now();} renderReports(); renderDashboard(); const pending=allReports.filter(x=>(x.status||'pending')==='pending').length; document.getElementById('statReports').textContent=pending; document.getElementById('navReports').textContent=pending; renderByBrandPanel(); chainKeys.forEach(k=>refreshChainTable(k)); }
+  if(ok){ const r=allReports.find(x=>x.id===btn.dataset.reportid); if(r){r.status=btn.dataset.status;r.moderatedAt=Date.now();} renderReports(); renderDashboard(); const pending=allReports.filter(x=>(x.status||'pending')==='pending').length; document.getElementById('statReports').textContent=pending; document.getElementById('navReports').textContent=pending; renderAllBrandPanels(); chainKeys.forEach(k=>refreshChainTable(k)); }
   else { alert('Could not update report — try again.'); btn.disabled=false; }
 });
 
@@ -966,32 +966,23 @@ const chainKeys = Object.keys(CHAIN_META);
   });
 })();
 
-(function buildDashboardBrandPanel(){
+(function buildBrandPanels(){
   const dashboardGrid = document.querySelector('[data-view="dashboard"] .dashboard-grid');
-  const panel = document.createElement('section');
-  panel.className = 'panel';
-  panel.innerHTML = `
-    <div class="panel-header"><div><h2 class="panel-title">By brand</h2><p class="panel-note">Quick health check per chain, color-coded to match the map</p></div></div>
-    <div id="byBrandList" class="activity-list"><div class="empty-state">Loading…</div></div>
-  `;
-  dashboardGrid.insertAdjacentElement('afterend', panel);
-
-  // One mini activity feed per brand — last several ratings, reports, and tips for
-  // that chain only, so you don't have to open each brand's tab just to check in.
-  const activityGrid = document.createElement('div');
-  activityGrid.className = 'dashboard-grid-3';
+  const grid = document.createElement('div');
+  grid.className = 'dashboard-grid-3';
   chainKeys.forEach(key => {
     const meta = CHAIN_META[key];
     const brandPanel = document.createElement('section');
     brandPanel.className = 'panel';
     brandPanel.style.borderTop = `3px solid ${meta.color}`;
     brandPanel.innerHTML = `
-      <div class="panel-header"><div><h2 class="panel-title">${escapeHtml(meta.name)}</h2><p class="panel-note">Recent ratings, reports &amp; tips</p></div><button class="mini-btn" data-go="chain-${key}">View all</button></div>
+      <div class="panel-header"><div><h2 class="panel-title">${escapeHtml(meta.name)}</h2><p class="panel-note">Quick health check + recent activity</p></div><button class="mini-btn" data-go="chain-${key}">View all</button></div>
+      <div id="brandSummary-${key}" style="padding:12px 19px;border-bottom:1px solid var(--line);color:var(--muted);font-size:12px;">—</div>
       <div id="brandActivity-${key}" class="activity-list"><div class="empty-state">Loading…</div></div>
     `;
-    activityGrid.appendChild(brandPanel);
+    grid.appendChild(brandPanel);
   });
-  panel.insertAdjacentElement('afterend', activityGrid);
+  dashboardGrid.insertAdjacentElement('afterend', grid);
 })();
 
 // Given a location ID, finds which chain it belongs to (used to attribute reports —
@@ -1001,11 +992,26 @@ function chainForLocId(locId){
   return row ? (row.loc.chain || 'stewarts') : null;
 }
 
-function renderBrandActivity(key){
-  const root = document.getElementById('brandActivity-' + key);
-  if(!root) return;
+function renderBrandPanel(key){
+  const meta = CHAIN_META[key];
+  const rows = allRows.filter(r => (r.loc.chain||'stewarts') === key);
+
+  // Stats strip
+  const summaryEl = document.getElementById('brandSummary-' + key);
+  if(summaryEl){
+    const storeSum = rows.reduce((s,r)=>s+(r.agg.storeSum||0),0);
+    const storeCount = rows.reduce((s,r)=>s+(r.agg.storeCount||0),0);
+    const bathSum = rows.reduce((s,r)=>s+(r.agg.bathroomSum||0),0);
+    const bathCount = rows.reduce((s,r)=>s+(r.agg.bathroomCount||0),0);
+    const pendingForChain = allReports.filter(r => (r.status||'pending')==='pending' && chainForLocId(r.locId)===key).length;
+    summaryEl.innerHTML = `<b style="color:var(--text)">${rows.length}</b> locations · <b style="color:var(--text)">${avgStr(storeSum,storeCount)}★</b> store · <b style="color:var(--text)">${avgStr(bathSum,bathCount)}★</b> bathroom · <b style="color:${pendingForChain ? 'var(--warning)' : 'var(--text)'}">${pendingForChain}</b> pending`;
+  }
+
+  // Recent activity feed
+  const activityEl = document.getElementById('brandActivity-' + key);
+  if(!activityEl) return;
   const events = [];
-  allRows.filter(r => (r.loc.chain||'stewarts')===key).forEach(r => {
+  rows.forEach(r => {
     (r.votes||[]).forEach(v => {
       const storeStr = v.store ? `Store ${v.store}★` : '';
       const bathStr = v.bathroom ? `Bathroom ${v.bathroom}★` : '';
@@ -1022,39 +1028,17 @@ function renderBrandActivity(key){
   allReports.filter(rep => chainForLocId(rep.locId) === key).forEach(rep => {
     events.push({
       ts: rep.ts || 0,
-      html: activityItem('⚑', reportType(rep), rep.locName || rep.appArea || CHAIN_META[key].name, rep.ts ? new Date(rep.ts).toLocaleDateString() : '')
+      html: activityItem('⚑', reportType(rep), rep.locName || rep.appArea || meta.name, rep.ts ? new Date(rep.ts).toLocaleDateString() : '')
     });
   });
   events.sort((a,b) => b.ts - a.ts);
-  root.innerHTML = events.length
+  activityEl.innerHTML = events.length
     ? events.slice(0, 8).map(e => e.html).join('')
     : '<div class="empty-state">No recent activity for this brand yet.</div>';
 }
 
-function renderByBrandPanel(){
-  const root = document.getElementById('byBrandList');
-  if(!root) return;
-  root.innerHTML = chainKeys.map(key => {
-    const meta = CHAIN_META[key];
-    const rows = allRows.filter(r => (r.loc.chain || 'stewarts') === key);
-    const storeSum = rows.reduce((s,r)=>s+(r.agg.storeSum||0),0);
-    const storeCount = rows.reduce((s,r)=>s+(r.agg.storeCount||0),0);
-    const bathSum = rows.reduce((s,r)=>s+(r.agg.bathroomSum||0),0);
-    const bathCount = rows.reduce((s,r)=>s+(r.agg.bathroomCount||0),0);
-    const pendingForChain = allReports.filter(r => {
-      if((r.status||'pending')!=='pending') return false;
-      const row = allRows.find(x=>x.loc.id===r.locId);
-      return row && (row.loc.chain||'stewarts')===key;
-    }).length;
-    return `<div class="activity-item" data-go="chain-${key}" style="cursor:pointer;border-left:4px solid ${meta.color};">
-      <div class="activity-icon" style="background:${meta.color}22;color:${meta.color};">●</div>
-      <div>
-        <div class="activity-title">${escapeHtml(meta.name)}</div>
-        <div class="activity-meta">${rows.length} locations · ${avgStr(storeSum,storeCount)}★ store · ${avgStr(bathSum,bathCount)}★ bathroom</div>
-      </div>
-      <div class="activity-time">${pendingForChain ? pendingForChain + ' pending' : ''}</div>
-    </div>`;
-  }).join('');
+function renderAllBrandPanels(){
+  chainKeys.forEach(renderBrandPanel);
 }
 
 function refreshChainTable(key){
@@ -1098,8 +1082,8 @@ function renderChainTips(key){
 }
 
 function refreshAllChainViews(){
-  chainKeys.forEach(key => { refreshChainTable(key); renderChainTips(key); renderBrandActivity(key); });
-  renderByBrandPanel();
+  chainKeys.forEach(key => { refreshChainTable(key); renderChainTips(key); });
+  renderAllBrandPanels();
 }
 
 chainKeys.forEach(key => {
