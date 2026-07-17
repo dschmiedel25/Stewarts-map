@@ -1510,6 +1510,20 @@ function renderBathroomPassport(stats, results){
       const r = results[def.key];
       const dateStr = r.unlockedAt ? new Date(r.unlockedAt).toLocaleDateString() : null;
       const progressStr = (!r.unlocked && r.total > 1) ? `${r.current} / ${r.total}` : '';
+      const hasProgress = r.unlocked || r.current > 0;
+
+      // PlayStation-style hidden trophy: zero progress means we don't reveal what the
+      // achievement is yet — just that one exists, waiting to be found.
+      if(!hasProgress){
+        return `<div class="achievement-card locked hidden-trophy">
+          <div class="achievement-icon">🔒</div>
+          <div class="achievement-info">
+            <div class="achievement-name">Hidden Trophy</div>
+            <div class="achievement-desc">Keep exploring to reveal this one</div>
+          </div>
+        </div>`;
+      }
+
       return `<div class="achievement-card ${r.unlocked ? 'unlocked' : 'locked'}">
         <div class="achievement-icon">${def.icon}</div>
         <div class="achievement-info">
