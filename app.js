@@ -158,6 +158,7 @@ map.on('popupopen', () => {
   document.getElementById('openNowToggle').style.display = 'none';
   document.getElementById('listViewToggle').style.display = 'none';
   document.getElementById('leaderboardToggle').style.display = 'none';
+  document.getElementById('whereAmIBtn').style.display = 'none';
 });
 map.on('popupclose', () => {
   document.getElementById('locateBtn').style.display = '';
@@ -166,6 +167,7 @@ map.on('popupclose', () => {
   document.getElementById('openNowToggle').style.display = '';
   document.getElementById('listViewToggle').style.display = '';
   document.getElementById('leaderboardToggle').style.display = '';
+  document.getElementById('whereAmIBtn').style.display = '';
 });
 
 // Two tile sources now: satellite imagery for light mode, street map (with a CSS invert
@@ -2306,7 +2308,49 @@ function bathroomNowCard(result,fallback=false){
   return `<div class="bathroom-now-card"><button class="bathroom-now-close" id="bathroom-now-close" title="Close">✕</button><div class="now-title">🚽 ${fallback?'Closest location':'Closest bathroom by driving distance'}</div><b>${result.loc.n}</b><br>${distance}${duration}<br>${open===true?'🟢 Open now':open===false?'🔴 Closed now':'⚪ Hours unavailable'}<br>🚻 ${avgStr(agg.bathroomSum,agg.bathroomCount)}★ · ${agg.bathroomCount} rating${agg.bathroomCount===1?'':'s'}${fallback?'<br><small>Driving route unavailable; using straight-line distance.</small>':''}${hoursMissingNote}${chainNote}<div class="now-actions"><button class="btn btn-primary" id="bathroom-now-directions">🧭 Get Directions</button><button class="btn btn-secondary" id="bathroom-now-view">View pin</button></div></div>`;
 }
 let userMarker=null;
+const whereAmIBtn=document.getElementById('whereAmIBtn');
 const locateBtn=document.getElementById('locateBtn'),nearestInfo=document.getElementById('nearestInfo');
+
+function setUserLocationMarker(lat, lng){
+  if(userMarker) map.removeLayer(userMarker);
+  userMarker=L.marker([lat,lng],{
+    icon:L.divIcon({
+      className:'',
+      html:'<div class="user-location-dot"><span></span></div>',
+      iconSize:[26,26],
+      iconAnchor:[13,13]
+    }),
+    zIndexOffset:1000
+  }).addTo(map);
+  return userMarker;
+}
+
+whereAmIBtn.addEventListener('click',()=>{
+  if(!navigator.geolocation){
+    nearestInfo.style.display='block';
+    nearestInfo.textContent="Your browser doesn't support location.";
+    return;
+  }
+  const original=whereAmIBtn.innerHTML;
+  whereAmIBtn.disabled=true;
+  whereAmIBtn.innerHTML='<span class="location-spinner" aria-hidden="true"></span><span>Locating…</span>';
+  navigator.geolocation.getCurrentPosition(pos=>{
+    const lat=pos.coords.latitude, lng=pos.coords.longitude;
+    lastKnownPos={lat,lng,ts:Date.now()};
+    currentListPosition=lastKnownPos;
+    setUserLocationMarker(lat,lng);
+    map.setView([lat,lng],16,{animate:true});
+    whereAmIBtn.disabled=false;
+    whereAmIBtn.innerHTML=original;
+  },err=>{
+    whereAmIBtn.disabled=false;
+    whereAmIBtn.innerHTML=original;
+    nearestInfo.style.display='block';
+    nearestInfo.textContent=err.code===1
+      ? 'Location access was denied. Enable location permission for this site.'
+      : 'Could not get your location. Check your connection and location settings.';
+  },{enableHighAccuracy:true,timeout:10000,maximumAge:30000});
+});
 let suppressNextLocateClick=false;
 function showBathroomNowResult(result,fallback=false){
   nearestInfo.style.display='block'; nearestInfo.innerHTML=bathroomNowCard(result,fallback);
@@ -2321,8 +2365,7 @@ locateBtn.addEventListener('click',()=>{
   locateBtn.disabled=true;locateBtn.textContent='🚽 Finding bathroom…';nearestInfo.style.display='none';
   navigator.geolocation.getCurrentPosition(async pos=>{
     const user={lat:pos.coords.latitude,lng:pos.coords.longitude};lastKnownPos={...user,ts:Date.now()};currentListPosition=lastKnownPos;
-    if(userMarker)map.removeLayer(userMarker);
-    userMarker=L.marker([user.lat,user.lng],{icon:L.divIcon({className:'',html:'<div style="background:#2196f3;width:16px;height:16px;border-radius:50%;border:3px solid #fff;box-shadow:0 0 6px rgba(0,0,0,.6);"></div>',iconSize:[16,16],iconAnchor:[8,8]})}).addTo(map);
+    setUserLocationMarker(user.lat,user.lng);
     // Prefer the selected chains, but don't strand someone far from their nearest pick —
     // if nothing selected is within a reasonable driving distance, widen to every chain
     // (still open-only) so the closest real option wins instead.
