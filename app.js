@@ -16,7 +16,9 @@ const CHAIN_REGISTRY = {
   cumberlandFarms: { name: "Cumberland Farms", color: '#009639', textColor: '#ffffff', dataVar: 'cumberlandFarmsLocations' },
   wawa: { name: "Wawa", color: '#c8102e', textColor: '#ffffff', dataVar: 'wawaLocations' },
   fastrac: { name: "Fastrac", color: '#e1251b', textColor: '#ffffff', dataVar: 'fastracLocations' },
-  alltownFresh: { name: "Alltown Fresh", color: '#4f6f3d', textColor: '#ffffff', dataVar: 'alltownFreshLocations' }
+  alltownFresh: { name: "Alltown Fresh", color: '#4f6f3d', textColor: '#ffffff', dataVar: 'alltownFreshLocations' },
+  byrneDairy: { name: "Byrne Dairy", color: '#0067b1', textColor: '#ffffff', dataVar: 'byrneDairyLocations' },
+  parkers: { name: "Parker's", color: '#ffc72c', textColor: '#1c1c1e', dataVar: 'parkersLocations' }
 };
 const DEFAULT_CHAIN_KEY = 'stewarts';
 
