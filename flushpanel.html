@@ -162,6 +162,8 @@ button,input{font:inherit}button{touch-action:manipulation}a{color:var(--accent)
 <script src="alltownfresh-locations.js"></script>
 <script src="byrne-dairy-locations.js"></script>
 <script src="parkers-locations.js"></script>
+<script src="sheetz-locations.js"></script>
+<script src="racetrac-locations.js"></script>
 <script>
 // Same merge pattern as the public app's CHAIN_REGISTRY — locations.js was a stale,
 // Stewart's-only snapshot (311 entries) that never got updated when Cumberland Farms
@@ -176,7 +178,9 @@ const CHAIN_META = {
   fastrac: { name: 'Fastrac', color: '#e1251b', dataVar: 'fastracLocations' },
   alltownFresh: { name: 'Alltown Fresh', color: '#4f6f3d', dataVar: 'alltownFreshLocations' },
   byrneDairy: { name: 'Byrne Dairy', color: '#be1e2d', dataVar: 'byrneDairyLocations' },
-  parkers: { name: "Parker's", color: '#005ca9', dataVar: 'parkersLocations' }
+  parkers: { name: "Parker's", color: '#005ca9', dataVar: 'parkersLocations' },
+  sheetz: { name: "Sheetz", color: '#ee3124', dataVar: 'sheetzLocations' },
+  racetrac: { name: "RaceTrac", color: '#00205b', dataVar: 'racetracLocations' }
 };
 let seedLocations = [];
 Object.keys(CHAIN_META).forEach(key => {
