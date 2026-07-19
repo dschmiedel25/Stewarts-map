@@ -629,8 +629,26 @@ function renderReports(){
     const details = r.details || r.description || r.suggestedCorrection || r.reason || '';
     const loc = r.locName || r.locationName || r.appArea || 'BathroomReport';
     const address = r.addr || r.address || '';
+    // Identifiers so a moderator can find the exact stop and fix it — even when the
+    // address is blank. Coordinates link to Google Maps; "Open in app" jumps to the pin.
+    const locId = r.locId || r.locationId || '';
+    const chainName = r.chain || r.chainName || '';
+    const storeNum = (r.storeNumber != null && r.storeNumber !== '') ? r.storeNumber : '';
+    const cityState = [r.city, r.state].filter(Boolean).join(', ');
+    const hasCoords = typeof r.lat === 'number' && typeof r.lng === 'number';
+    const mapsUrl = hasCoords ? `https://www.google.com/maps/search/?api=1&query=${r.lat},${r.lng}` : '';
+    const openUrl = locId ? `./index.html?loc=${encodeURIComponent(locId)}` : '';
+    const CHIP = 'display:inline-flex;align-items:center;gap:4px;padding:3px 8px;border-radius:999px;background:#0c1929;border:1px solid #26384c;font-size:11px;font-weight:700;color:#c5d2de;margin:6px 6px 0 0;text-decoration:none;white-space:nowrap;';
+    const identRow = `<div style="display:flex;flex-wrap:wrap;">
+        ${chainName ? `<span style="${CHIP}">${escapeHtml(chainName)}${storeNum ? ' #' + escapeHtml(String(storeNum)) : ''}</span>` : ''}
+        ${cityState ? `<span style="${CHIP}">${escapeHtml(cityState)}</span>` : ''}
+        ${locId ? `<span style="${CHIP}font-family:ui-monospace,SFMono-Regular,monospace;">ID ${escapeHtml(locId)}</span>` : ''}
+        ${hasCoords ? `<a style="${CHIP}color:#8fd3ff;border-color:rgba(143,211,255,.3);" href="${mapsUrl}" target="_blank" rel="noopener">📍 ${r.lat.toFixed(5)}, ${r.lng.toFixed(5)}</a>` : ''}
+        ${openUrl ? `<a style="${CHIP}color:#7ee0ad;border-color:rgba(87,200,145,.3);" href="${openUrl}" target="_blank" rel="noopener">Open in app ↗</a>` : ''}
+      </div>`;
     return `<article class="report-card">
       <div class="report-head"><div><div class="report-type">${escapeHtml(reportType(r))}</div><div class="report-location">${escapeHtml(loc)}${address ? ' · ' + escapeHtml(address) : ''}</div></div><span class="status-pill ${statusClass(status)}">${escapeHtml(status)}</span></div>
+      ${identRow}
       <div class="report-copy">${escapeHtml(details)}</div>
       ${r.moderatorNote ? `<div class="activity-meta"><b>Moderator note:</b> ${escapeHtml(r.moderatorNote)}</div>` : ''}
       <div class="report-foot"><span class="activity-meta">Submitted ${formatWhen(r.ts)}</span><div class="report-actions">

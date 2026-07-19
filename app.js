@@ -1102,8 +1102,25 @@ function attachShareHandler(loc){
 async function logReport(loc, reason){
   try{
     const {db, collection, addDoc} = await fb();
+    const chainKey = loc.chain || DEFAULT_CHAIN_KEY;
+    // Capture enough to identify and fix the exact stop from FlushPanel — including
+    // coordinates, which pin down the location even when the street address is blank
+    // (many imported stops have no address yet). None of these are moderator-only
+    // fields, so the write still satisfies the reports create rules.
     await addDoc(collection(db, 'reports'), {
-      locId: loc.id, locName: loc.n, addr: loc.addr, reason, ts: Date.now()
+      locId: loc.id,
+      locName: loc.n,
+      addr: loc.addr || null,
+      chainKey: chainKey,
+      chain: (CHAIN_REGISTRY[chainKey] || {}).name || chainKey,
+      storeNumber: (loc.storeNumber ?? loc.num) ?? null,
+      city: (loc.city ?? (loc.address && loc.address.city)) ?? null,
+      state: (loc.state ?? (loc.address && loc.address.state)) ?? null,
+      lat: loc.lat,
+      lng: loc.lng,
+      reporterId: (window.__currentUser && window.__currentUser.uid) || getClientId(),
+      reason: reason,
+      ts: Date.now()
     });
     return true;
   }catch(e){
@@ -1216,10 +1233,15 @@ function attachReportHandler(loc){
     newSubmit.disabled = true;
     newSubmit.textContent = 'Sending...';
 
-    await logReport(loc, reason);
+    const sent = await logReport(loc, reason);
 
-    if(note){ note.style.color = '#2f6b3c'; note.textContent = 'Report sent — thank you!'; }
-    input.value = '';
+    if(sent){
+      if(note){ note.style.color = '#2f6b3c'; note.textContent = 'Report sent — thank you!'; }
+      input.value = '';
+    } else {
+      // Don't claim success on a failed write — the reporter would think it went through.
+      if(note){ note.style.color = '#c62828'; note.textContent = "Couldn't send — check your connection and try again."; }
+    }
     newSubmit.disabled = false;
     newSubmit.textContent = 'Send report';
   });
