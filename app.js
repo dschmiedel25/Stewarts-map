@@ -18,7 +18,9 @@ const CHAIN_REGISTRY = {
   fastrac: { name: "Fastrac", color: '#e1251b', textColor: '#ffffff', dataVar: 'fastracLocations' },
   alltownFresh: { name: "Alltown Fresh", color: '#4f6f3d', textColor: '#ffffff', dataVar: 'alltownFreshLocations' },
   byrneDairy: { name: "Byrne Dairy", color: '#be1e2d', textColor: '#ffffff', dataVar: 'byrneDairyLocations' },
-  parkers: { name: "Parker's", color: '#005ca9', textColor: '#ffffff', dataVar: 'parkersLocations' }
+  parkers: { name: "Parker's", color: '#005ca9', textColor: '#ffffff', dataVar: 'parkersLocations' },
+  sheetz: { name: "Sheetz", color: '#ee3124', textColor: '#ffffff', dataVar: 'sheetzLocations' },
+  racetrac: { name: "RaceTrac", color: '#00205b', textColor: '#ffffff', dataVar: 'racetracLocations' }
 };
 const DEFAULT_CHAIN_KEY = 'stewarts';
 
