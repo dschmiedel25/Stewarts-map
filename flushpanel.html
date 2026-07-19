@@ -98,7 +98,6 @@ button,input{font:inherit}button{touch-action:manipulation}a{color:var(--accent)
       <button class="nav-link" data-page="locations"><span class="nav-icon">⌖</span>Locations</button>
       <button class="nav-link" data-page="tips"><span class="nav-icon">💡</span>Tips</button>
       <button class="nav-link" data-page="requests"><span class="nav-icon">＋</span>Location requests <span class="nav-badge" id="navMissing">0</span></button>
-      <button class="nav-link" data-page="leaderboard"><span class="nav-icon">♛</span>Leaderboard</button>
     </nav>
     <div class="sidebar-foot">
       <span id="adminIdentity"></span>
@@ -149,9 +148,6 @@ button,input{font:inherit}button{touch-action:manipulation}a{color:var(--accent)
     <section class="page-view" data-view="requests">
       <section class="panel"><div class="panel-header"><div><h2 class="panel-title">Location requests</h2><p class="panel-note">Suggested missing locations waiting for review</p></div></div><div class="table-wrap"><table><thead><tr><th>Description</th><th>Submitted</th><th>Action</th></tr></thead><tbody id="missingBody"><tr><td colspan="3" class="loading">Loading…</td></tr></tbody></table></div></section>
     </section>
-
-    <section class="page-view" data-view="leaderboard">
-      <section class="panel" id="namesPanel"><div class="panel-header"><div><h2 class="panel-title">Leaderboard names</h2><p class="panel-note">Review claimed and reported display names</p></div></div><div class="panel-body padded"><p class="panel-note">Release a stuck or inappropriate name so it can be claimed again.</p></div><div class="table-wrap"><table><thead><tr><th>Name</th><th>Claimed</th><th>Action</th></tr></thead><tbody id="namesBody"><tr><td colspan="3" class="loading">Loading…</td></tr></tbody></table></div><div class="panel-header"><div><h3 class="panel-title">Reported names</h3></div></div><div class="table-wrap"><table><thead><tr><th>Name</th><th>Reported</th><th>Action</th></tr></thead><tbody id="nameReportsBody"><tr><td colspan="3" class="loading">Loading…</td></tr></tbody></table></div></section>
     </section>
   </div>
 </main>
@@ -254,30 +250,7 @@ async function updateReportStatus(reportId, status){
   }
 }
 
-async function releaseName(clientId){
-  try{
-    const {db, doc, deleteDoc, setDoc} = await fb();
-    await deleteDoc(doc(db, 'displayNames', clientId));
-    // Also block this account from silently reappearing on next login — otherwise releasing
-    // an inappropriate username wouldn't actually stick, since the username itself is unchanged
-    await setDoc(doc(db, 'leaderboardBlocklist', clientId), { blockedAt: Date.now() });
-    return true;
-  }catch(e){
-    console.error('releaseName failed', e);
-    return false;
-  }
-}
 
-async function dismissNameReport(reportId){
-  try{
-    const {db, doc, deleteDoc} = await fb();
-    await deleteDoc(doc(db, 'nameReports', reportId));
-    return true;
-  }catch(e){
-    console.error('dismissNameReport failed', e);
-    return false;
-  }
-}
 
 async function dismissMissing(missingId){
   try{
@@ -514,55 +487,6 @@ async function loadAll(){
   document.getElementById('statLocations').textContent = seedLocations.length;
   document.getElementById('statRated').textContent = votesSnap.size;
   document.getElementById('statTips').textContent = totalTips;
-
-  try{
-    const namesSnap = await getDocs(collection(db, 'displayNames'));
-    const names = [];
-    namesSnap.forEach(d => names.push({ clientId: d.id, ...d.data() }));
-    names.sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0));
-    const namesBody = document.getElementById('namesBody');
-    if(names.length === 0){
-      namesBody.innerHTML = '<tr><td colspan="3" class="loading">No names claimed yet.</td></tr>';
-    } else {
-      namesBody.innerHTML = names.map(n => {
-        const when = n.updatedAt ? new Date(n.updatedAt).toLocaleString() : '—';
-        return `<tr>
-          <td><b>${escapeHtml(n.name || '')}</b></td>
-          <td style="color:#999;">${when}</td>
-          <td><button class="release-name-btn" data-clientid="${n.clientId}" data-name="${escapeHtml(n.name||'')}" style="background:#b71c1c;color:#fff;border:none;border-radius:6px;padding:5px 10px;font-size:12px;cursor:pointer;">🗑️ Release</button></td>
-        </tr>`;
-      }).join('');
-    }
-  }catch(e){
-    console.error('Failed to load displayNames', e);
-    document.getElementById('namesBody').innerHTML = '<tr><td colspan="3" class="loading">Could not load — check Firestore rules for the displayNames collection.</td></tr>';
-  }
-
-  try{
-    const nameReportsSnap = await getDocs(collection(db, 'nameReports'));
-    const nameReports = [];
-    nameReportsSnap.forEach(d => nameReports.push({ id: d.id, ...d.data() }));
-    nameReports.sort((a, b) => (b.ts || 0) - (a.ts || 0));
-    const nameReportsBody = document.getElementById('nameReportsBody');
-    if(nameReports.length === 0){
-      nameReportsBody.innerHTML = '<tr><td colspan="3" class="loading">No reported names.</td></tr>';
-    } else {
-      nameReportsBody.innerHTML = nameReports.map(r => {
-        const when = r.ts ? new Date(r.ts).toLocaleString() : '—';
-        return `<tr>
-          <td><b>${escapeHtml(r.name || '')}</b></td>
-          <td style="color:#999;">${when}</td>
-          <td>
-            <button class="release-reported-name-btn" data-clientid="${r.clientId}" data-reportid="${r.id}" style="background:#b71c1c;color:#fff;border:none;border-radius:6px;padding:5px 8px;font-size:11px;cursor:pointer;margin-right:4px;">Release name</button>
-            <button class="dismiss-name-report-btn" data-reportid="${r.id}" style="background:#444;color:#fff;border:none;border-radius:6px;padding:5px 8px;font-size:11px;cursor:pointer;">Dismiss</button>
-          </td>
-        </tr>`;
-      }).join('');
-    }
-  }catch(e){
-    console.error('Failed to load nameReports', e);
-    document.getElementById('nameReportsBody').innerHTML = '<tr><td colspan="3" class="loading">Could not load — check Firestore rules for the nameReports collection.</td></tr>';
-  }
 
   const reportsSnap = await getDocs(collection(db, 'reports'));
   allReports = [];
@@ -868,60 +792,7 @@ document.getElementById('reportsCards').addEventListener('click', async (e) => {
   else { alert('Could not update report — try again.'); btn.disabled=false; }
 });
 
-document.getElementById('namesBody').addEventListener('click', async (e) => {
-  const btn = e.target.closest('.release-name-btn');
-  if(!btn) return;
-  const clientId = btn.dataset.clientid;
-  const name = btn.dataset.name;
-  if(!confirm(`Release the name "${name}"?\n\nWhoever had it will lose it, and anyone (including them, if they claim a new device ID) can claim it fresh.`)) return;
-  btn.disabled = true;
-  btn.textContent = '...';
-  const ok = await releaseName(clientId);
-  if(ok){
-    btn.closest('tr').remove();
-  } else {
-    alert('Could not release — try again.');
-    btn.disabled = false;
-    btn.textContent = '🗑️ Release';
-  }
-});
 
-document.getElementById('nameReportsBody').addEventListener('click', async (e) => {
-  const releaseBtn = e.target.closest('.release-reported-name-btn');
-  if(releaseBtn){
-    const clientId = releaseBtn.dataset.clientid;
-    const reportId = releaseBtn.dataset.reportid;
-    if(!confirm('Release this name and dismiss the report?\n\nThe person will lose their claimed name.')) return;
-    releaseBtn.disabled = true;
-    releaseBtn.textContent = '...';
-    const releaseOk = await releaseName(clientId);
-    if(releaseOk){
-      await dismissNameReport(reportId);
-      releaseBtn.closest('tr').remove();
-      loadAll(); // refresh so the Leaderboard Names table above reflects the release too
-    } else {
-      alert('Could not release — try again.');
-      releaseBtn.disabled = false;
-      releaseBtn.textContent = 'Release name';
-    }
-    return;
-  }
-
-  const dismissBtn = e.target.closest('.dismiss-name-report-btn');
-  if(dismissBtn){
-    const reportId = dismissBtn.dataset.reportid;
-    dismissBtn.disabled = true;
-    dismissBtn.textContent = '...';
-    const ok = await dismissNameReport(reportId);
-    if(ok){
-      dismissBtn.closest('tr').remove();
-    } else {
-      alert('Could not dismiss — try again.');
-      dismissBtn.disabled = false;
-      dismissBtn.textContent = 'Dismiss';
-    }
-  }
-});
 
 document.getElementById('missingBody').addEventListener('click', async (e) => {
   const btn = e.target.closest('.dismiss-missing-btn');
@@ -945,7 +816,7 @@ document.getElementById('missingBody').addEventListener('click', async (e) => {
 });
 
 // ---- Admin navigation ----
-const pageMeta={dashboard:['Dashboard','A quick view of what is happening across BathroomReport.'],reports:['Reports','Review app and location-data issues by status.'],locations:['Locations','Manage location ratings, tips, and data.'],tips:['Tips','Correct spelling or remove public tips.'],requests:['Location requests','Review suggested missing locations.'],leaderboard:['Leaderboard','Manage claimed and reported display names.']};
+const pageMeta={dashboard:['Dashboard','A quick view of what is happening across BathroomReport.'],reports:['Reports','Review app and location-data issues by status.'],locations:['Locations','Manage location ratings, tips, and data.'],tips:['Tips','Correct spelling or remove public tips.'],requests:['Location requests','Review suggested missing locations.']};
 
 // ── Per-chain sidebar tabs, pages, and dashboard breakdown ──────────────────────────────
 // Everything below is generated from CHAIN_META so adding a fourth chain later needs no

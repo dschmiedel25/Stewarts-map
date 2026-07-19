@@ -536,7 +536,7 @@ async function signUpAccount(username, password){
   if(!/^[a-zA-Z0-9_]+$/.test(clean)) return { ok: false, reason: 'Letters, numbers, and underscores only.' };
   if(password.length < 6) return { ok: false, reason: 'Password needs to be at least 6 characters.' };
   try{
-    const {auth, createUserWithEmailAndPassword} = await fb();
+    const {auth, createUserWithEmailAndPassword, db, doc, setDoc} = await fb();
     const oldAnonId = getClientId(); // capture before login changes what getEffectiveId() returns
     const cred = await createUserWithEmailAndPassword(auth, usernameToEmail(clean), password);
     await migrateAnonymousDataToAccount(oldAnonId, cred.user.uid, clean);
@@ -570,8 +570,8 @@ async function logOutAccount(){
   await signOut(auth);
 }
 
-// One-time migration: folds this device's anonymous ratings, check-ins, and achievements
-// into the account so signing up does not wipe out existing Passport progress.
+// One-time migration: folds this device's existing anonymous ratings/name into the new
+// account, so signing up doesn't wipe out history you already built up on this device.
 async function migrateAnonymousDataToAccount(oldAnonId, newUid, username){
   if(oldAnonId === newUid) return; // nothing to migrate (shouldn't normally happen)
   try{
@@ -2189,8 +2189,8 @@ document.getElementById('passportToggle').addEventListener('click', () => {
   updateAccountUI();
   checkAndUnlockAchievements();
   requestAnimationFrame(() => {
-    const passportSection = document.getElementById('passportSection');
-    if(passportSection) passportSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    const passport = document.getElementById('passportSection');
+    if(passport) passport.scrollIntoView({ block: 'start' });
   });
 });
 

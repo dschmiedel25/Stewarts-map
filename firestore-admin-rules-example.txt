@@ -18,9 +18,6 @@ service cloud.firestore {
     match /tips/{id} { allow read: if true; allow write: if isAdmin(); }
     match /reports/{id} { allow read, write: if isAdmin(); }
     match /missingReports/{id} { allow read, write: if isAdmin(); }
-    match /nameReports/{id} { allow read, write: if isAdmin(); }
-    match /displayNames/{id} { allow read: if true; allow write: if isAdmin(); }
-    match /leaderboardBlocklist/{id} { allow read, write: if isAdmin(); }
     match /aggregates/{id} { allow read: if true; allow write: if isAdmin(); }
     match /votes/{id} { allow read, write: if isAdmin(); }
   }
