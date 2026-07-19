@@ -161,7 +161,7 @@ map.on('popupopen', () => {
   document.getElementById('topLeftControls').style.display = 'none';
   document.getElementById('openNowToggle').style.display = 'none';
   document.getElementById('listViewToggle').style.display = 'none';
-  document.getElementById('leaderboardToggle').style.display = 'none';
+  document.getElementById('passportToggle').style.display = 'none';
   document.getElementById('whereAmIBtn').style.display = 'none';
 });
 map.on('popupclose', () => {
@@ -170,7 +170,7 @@ map.on('popupclose', () => {
   document.getElementById('topLeftControls').style.display = '';
   document.getElementById('openNowToggle').style.display = '';
   document.getElementById('listViewToggle').style.display = '';
-  document.getElementById('leaderboardToggle').style.display = '';
+  document.getElementById('passportToggle').style.display = '';
   document.getElementById('whereAmIBtn').style.display = '';
 });
 
@@ -536,11 +536,11 @@ async function signUpAccount(username, password){
   if(!/^[a-zA-Z0-9_]+$/.test(clean)) return { ok: false, reason: 'Letters, numbers, and underscores only.' };
   if(password.length < 6) return { ok: false, reason: 'Password needs to be at least 6 characters.' };
   try{
-    const {auth, createUserWithEmailAndPassword, db, doc, setDoc} = await fb();
+    const {auth, createUserWithEmailAndPassword} = await fb();
     const oldAnonId = getClientId(); // capture before login changes what getEffectiveId() returns
     const cred = await createUserWithEmailAndPassword(auth, usernameToEmail(clean), password);
     await migrateAnonymousDataToAccount(oldAnonId, cred.user.uid, clean);
-    // Your account username automatically IS your leaderboard name — no separate step needed,
+    // The account username is also used as the public display name.
     // since Firebase Auth already guarantees usernames are unique.
     await setDoc(doc(db, 'displayNames', cred.user.uid), {
       name: clean, nameLower: clean.toLowerCase(), updatedAt: Date.now()
@@ -593,7 +593,7 @@ async function migrateAnonymousDataToAccount(oldAnonId, newUid, username){
       await deleteDoc(voteDoc.ref);
     }
 
-    // Carry over a previously-set leaderboard name, if the new account doesn't already have one
+    // Carry over a previously-set display name if the new account doesn't already have one.
     const newNameSnap = await getDoc(doc(db, 'displayNames', newUid));
     if(!newNameSnap.exists()){
       const oldNameSnap = await getDoc(doc(db, 'displayNames', oldAnonId));
@@ -633,65 +633,6 @@ async function migrateAnonymousDataToAccount(oldAnonId, newUid, username){
     }
   }catch(e){
     console.error('migrateAnonymousDataToAccount failed (non-fatal):', e);
-  }
-}
-
-async function loadLeaderboard(){
-  try{
-    const {db, collection, getDocs} = await fb();
-
-    // Count distinct locations rated per device — bathroom and store separately, plus a
-    // combined "Shops rated" total (any location rated on either front)
-    const votesSnap = await getDocs(collection(db, 'votes'));
-    const bathroomLocsByClient = {};
-    const storeLocsByClient = {};
-    votesSnap.forEach(d => {
-      const v = d.data();
-      const cid = v.clientId;
-      if(!cid) return;
-      const locId = v.locId || d.id.split('_')[0];
-      if(v.bathroom > 0){
-        if(!bathroomLocsByClient[cid]) bathroomLocsByClient[cid] = new Set();
-        bathroomLocsByClient[cid].add(locId);
-      }
-      if(v.store > 0){
-        if(!storeLocsByClient[cid]) storeLocsByClient[cid] = new Set();
-        storeLocsByClient[cid].add(locId);
-      }
-    });
-
-    const namesSnap = await getDocs(collection(db, 'displayNames'));
-    const namesByClient = {};
-    namesSnap.forEach(d => { namesByClient[d.id] = d.data().name; });
-
-    const blocklistSnap = await getDocs(collection(db, 'leaderboardBlocklist'));
-    const blocked = new Set();
-    blocklistSnap.forEach(d => blocked.add(d.id));
-
-    // Only show devices that have actually set a name, aren't blocked, and have rated at
-    // least one bathroom or store — ranked by total distinct Shops rated (combined)
-    const allClientIds = new Set([...Object.keys(bathroomLocsByClient), ...Object.keys(storeLocsByClient)]);
-    const ranked = Array.from(allClientIds)
-      .filter(cid => namesByClient[cid] && !blocked.has(cid))
-      .map(cid => {
-        const bathroomSet = bathroomLocsByClient[cid] || new Set();
-        const storeSet = storeLocsByClient[cid] || new Set();
-        const combined = new Set([...bathroomSet, ...storeSet]);
-        return {
-          clientId: cid,
-          name: namesByClient[cid],
-          shopsCount: combined.size,
-          bathroomCount: bathroomSet.size,
-          storeCount: storeSet.size
-        };
-      })
-      .sort((a, b) => b.shopsCount - a.shopsCount)
-      .slice(0, 20);
-
-    return ranked;
-  }catch(e){
-    console.error('loadLeaderboard failed', e);
-    return null;
   }
 }
 
@@ -1409,7 +1350,7 @@ async function loadAllRatings(){
 // ============================================================
 // Achievements & Bathroom Passport
 // ============================================================
-// Lighthearted, no XP/levels/streaks/leaderboard — just simple unlockable badges computed
+// Lighthearted, no XP, levels, or streaks — just simple unlockable badges computed
 // from data we already have (ratings + check-ins). Unlock records are stored per-identity
 // (account UID if logged in, else this device's anonymous ID — consistent with how the rest
 // of the app already treats identity) in a new 'achievements' Firestore collection, so this
@@ -2240,83 +2181,6 @@ document.getElementById('accessibleOnly').addEventListener('change',buildListVie
 document.getElementById('listViewToggle').addEventListener('click',()=>{buildListView();document.getElementById('listViewPanel').classList.add('show');});
 document.getElementById('listViewClose').addEventListener('click',()=>{document.getElementById('listViewPanel').classList.remove('show');suppressNextLocateClick=true;setTimeout(()=>{suppressNextLocateClick=false;},400);});
 
-// Leaderboard panel
-let activeLeaderboardTab = 'bathroom';
-
-async function openLeaderboard(){
-  document.getElementById('leaderboardPanel').classList.add('show');
-
-  const noteEl = document.getElementById('leaderboardAccountNote');
-  if(isLoggedIn()){
-    const username = (window.__currentUser.email || '').split('@')[0];
-    noteEl.innerHTML = `You're on the board as <b style="color:var(--amber);">${escapeHtml(username)}</b>. <button id="leaderboardPassportBtn" style="background:none;border:none;color:var(--amber);text-decoration:underline;font-size:12px;cursor:pointer;padding:0 0 0 4px;">🎫 Passport</button> · <button id="leaderboardLogoutBtn" style="background:none;border:none;color:#e57373;text-decoration:underline;font-size:12px;cursor:pointer;padding:0 0 0 4px;">Log out</button>`;
-    document.getElementById('leaderboardPassportBtn').addEventListener('click', () => {
-      document.getElementById('leaderboardPanel').classList.remove('show');
-      document.getElementById('accountPanel').classList.add('show');
-      updateAccountUI();
-      checkAndUnlockAchievements();
-    });
-    document.getElementById('leaderboardLogoutBtn').addEventListener('click', async () => {
-      await logOutAccount();
-      updateAccountUI();
-      loadAllRatings();
-      openLeaderboard(); // refresh this panel to reflect the logged-out state
-    });
-  } else {
-    noteEl.innerHTML = `<button class="btn btn-amber" id="leaderboardLoginPrompt" style="width:100%;">👤 Log in to appear on the leaderboard</button>`;
-    document.getElementById('leaderboardLoginPrompt').addEventListener('click', () => {
-      document.getElementById('leaderboardPanel').classList.remove('show');
-      document.getElementById('accountPanel').classList.add('show');
-      updateAccountUI();
-      checkAndUnlockAchievements();
-    });
-  }
-
-  const itemsEl = document.getElementById('leaderboardItems');
-  itemsEl.innerHTML = '<div style="padding:16px;color:#999;">Loading...</div>';
-  const ranked = await loadLeaderboard();
-  if(ranked === null){
-    itemsEl.innerHTML = '<div style="padding:16px;color:#999;">Could not load the leaderboard — try again.</div>';
-    return;
-  }
-  if(ranked.length === 0){
-    itemsEl.innerHTML = `<div style="padding:16px;color:#999;">No one's logged in and rated a shop yet — be the first!</div>`;
-    return;
-  }
-  itemsEl.innerHTML = ranked.map((r, i) =>
-    `<div class="leaderboard-row-wrap">
-      <div class="leaderboard-row" data-clientid="${r.clientId}">
-        <span class="leaderboard-rank">#${i+1}</span>
-        <div class="leaderboard-main">
-          <div class="leaderboard-name">${escapeHtml(r.name)}</div>
-        </div>
-        <span class="leaderboard-arrow" id="lb-arrow-${r.clientId}">▾</span>
-      </div>
-      <div class="leaderboard-breakdown" id="lb-breakdown-${r.clientId}">
-        <div>🚻 ${r.bathroomCount} bathroom${r.bathroomCount === 1 ? '' : 's'} rated</div>
-        <div>🏪 ${r.storeCount} store${r.storeCount === 1 ? '' : 's'} rated</div>
-      </div>
-    </div>`
-  ).join('');
-}
-
-document.getElementById('leaderboardToggle').addEventListener('click', openLeaderboard);
-document.getElementById('leaderboardClose').addEventListener('click', () => {
-  document.getElementById('leaderboardPanel').classList.remove('show');
-  suppressNextLocateClick = true;
-  setTimeout(() => { suppressNextLocateClick = false; }, 400);
-});
-document.getElementById('leaderboardItems').addEventListener('click', (e) => {
-  const row = e.target.closest('.leaderboard-row');
-  if(!row) return;
-  const clientId = row.dataset.clientid;
-  const breakdown = document.getElementById('lb-breakdown-' + clientId);
-  const arrow = document.getElementById('lb-arrow-' + clientId);
-  if(!breakdown || !arrow) return;
-  const isOpen = breakdown.classList.toggle('open');
-  arrow.textContent = isOpen ? '▸' : '▾';
-});
-
 // Account panel
 function updateAccountUI(){
   const loggedIn = isLoggedIn();
@@ -2334,6 +2198,16 @@ function updateAccountUI(){
   const syncNote = document.getElementById('passportSyncNote');
   if(syncNote) syncNote.style.display = loggedIn ? 'none' : 'block';
 }
+
+document.getElementById('passportToggle').addEventListener('click', () => {
+  document.getElementById('accountPanel').classList.add('show');
+  updateAccountUI();
+  checkAndUnlockAchievements();
+  requestAnimationFrame(() => {
+    const passportSection = document.getElementById('passportSection');
+    if(passportSection) passportSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  });
+});
 
 document.getElementById('accountToggle').addEventListener('click', () => {
   document.getElementById('accountPanel').classList.add('show');

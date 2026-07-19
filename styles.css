@@ -171,7 +171,7 @@
   /* Right-side map controls: one aligned stack with matching dimensions. */
   #openNowToggle,
   #listViewToggle,
-  #leaderboardToggle,
+  #passportToggle,
   #whereAmIBtn{
     position:absolute;right:10px;z-index:500;
     width:148px;min-height:34px;box-sizing:border-box;
@@ -183,7 +183,7 @@
   }
   #openNowToggle{top:10px;}
   #listViewToggle{top:50px;}
-  #leaderboardToggle{top:90px;}
+  #passportToggle{top:90px;}
   #whereAmIBtn{top:130px;}
   #openNowToggle.active{background:#2e7d32;border-color:#2e7d32;color:#fff;}
   .map-control-icon{
@@ -379,7 +379,7 @@
     flex-direction:column;
   }
   #listViewPanel.show{display:flex;}
-  #listViewHeader, #leaderboardHeader, #accountHeader{
+  #listViewHeader, #accountHeader{
     flex:none;display:flex;justify-content:space-between;align-items:center;
     padding:14px 16px;font-size:17px;font-weight:700;color:var(--cream);
     border-bottom:2px solid var(--amber);
@@ -392,12 +392,6 @@
   .list-item .list-item-name{font-weight:700;font-size:14.5px;}
   .list-item .list-item-addr{font-size:12px;color:var(--muted);margin-top:2px;}
   .list-item:active{background:rgba(255,255,255,.08);}
-  #leaderboardPanel{
-    position:absolute;inset:0;z-index:1500;background:var(--charcoal);display:none;
-    flex-direction:column;
-  }
-  #leaderboardPanel.show{display:flex;}
-  #leaderboardClose{background:none;border:none;color:var(--cream);font-size:22px;cursor:pointer;}
   #accountPanel{
     position:absolute;inset:0;z-index:1500;background:var(--charcoal);display:none;
     flex-direction:column;
@@ -443,19 +437,6 @@
   .achievement-toast-title{font-size:11px;color:var(--muted);font-weight:700;text-transform:uppercase;letter-spacing:.4px;}
   .achievement-toast-name{font-size:15px;font-weight:800;color:var(--cream);}
 
-  .leaderboard-row-wrap{border-bottom:1px solid #333;}
-  .leaderboard-row{
-    padding:10px 16px;color:var(--cream);
-    display:flex;align-items:center;gap:10px;cursor:pointer;
-  }
-  .leaderboard-rank{font-weight:800;color:var(--amber);width:28px;flex:none;}
-  .leaderboard-main{flex:1;min-width:0;}
-  .leaderboard-name{font-weight:800;font-size:14px;color:var(--cream);}
-  .leaderboard-arrow{flex:none;color:var(--muted);font-size:13px;}
-  .leaderboard-breakdown{
-    display:none;padding:0 16px 12px 54px;color:var(--muted);font-size:13px;line-height:1.6;
-  }
-  .leaderboard-breakdown.open{display:block;}
   #installBanner{
     position:fixed;left:0;right:0;bottom:0;z-index:2000;
     background:var(--header-grad-top);border-top:2px solid var(--amber);
