@@ -611,21 +611,6 @@ async function loadAggregate(id){
 }
 
 // Atomically nudge the shared counters by a delta — safe even if others are rating at the same time
-async function bumpAggregate(id, sumKey, sumDelta, countKey, countDelta){
-  try{
-    const {db, doc, setDoc, increment} = await fb();
-    await setDoc(doc(db, 'aggregates', id), {
-      [sumKey]: increment(sumDelta),
-      [countKey]: increment(countDelta),
-      lastUpdated: Date.now()
-    }, { merge: true });
-    return true;
-  }catch(e){
-    console.error('save agg failed', e);
-    return false;
-  }
-}
-
 // Personal record of your own vote (per-account if logged in, per-device otherwise)
 async function loadMyVote(id){
   try{
@@ -1571,11 +1556,13 @@ function attachStarHandlers(loc){
         const quipEl = document.getElementById('quip-' + type + '-' + loc.id);
         if(quipEl) quipEl.textContent = quipFor(type, val);
 
-        const okAgg = await bumpAggregate(loc.id, sumKey, sumDelta, countKey, countDelta);
+        // Aggregate totals are recomputed server-side by the recomputeBathroomAggregate Cloud
+        // Function, which reacts to this vote write — the client only writes the vote. The
+        // on-screen average was already updated optimistically above.
         const okVote = await saveMyVote(loc.id, myVote);
-        if(okAgg) logActivity('rating', { sourceId: loc.id + '_' + getEffectiveId(), locId: loc.id });
-        if(note) note.textContent = (okAgg && okVote) ? 'Saved ✓ — visible to everyone' : 'Save failed';
-        if(okAgg && okVote) maybeShowSupportPrompt();
+        if(okVote) logActivity('rating', { sourceId: loc.id + '_' + getEffectiveId(), locId: loc.id });
+        if(note) note.textContent = okVote ? 'Saved ✓ — visible to everyone' : 'Save failed';
+        if(okVote) maybeShowSupportPrompt();
 
         // refresh the label text with new average
         const labelEl = starGroup.parentElement.querySelector('.rating-label');
