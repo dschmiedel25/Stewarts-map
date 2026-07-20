@@ -77,6 +77,21 @@ function applyOverride(rec, ov){
   return changes;
 }
 
+// Build a brand-new location record from an override that has no existing match.
+// Requires a valid id + numeric lat/lng; name/addr/hours come through FIELD_MAP.
+function buildNewRecord(id, ov){
+  const rec = { n: ov.locName || ov.n || id, lat: ov.lat, lng: ov.lng, addr: ov.addr || '', id: id };
+  // hours: prefer per-day map, else single window (skip empty = unknown)
+  if(ov.hours && typeof ov.hours === 'object' && Object.keys(ov.hours).length) rec.hours = ov.hours;
+  else if(ov.hrs) rec.hrs = ov.hrs;
+  // optional identity fields, only if present
+  ['city','state','zipCode','phone'].forEach(k => { if(ov[k]) rec[k] = ov[k]; });
+  if(ov.chain) rec.chain = ov.chain;
+  return rec;
+}
+
+function isValidCoord(v){ return v !== '' && v != null && !Number.isNaN(parseFloat(v)); }
+
 function main(){
   const [,, overridesPath, dirArg, outArg] = process.argv;
   if(!overridesPath){
@@ -106,13 +121,38 @@ function main(){
   }
   console.log('Indexed ' + Object.keys(byId).length + ' locations across ' + files.length + ' file(s).');
 
+  // Map a chain key -> its file, accepting both the varName style ("cumberlandFarms")
+  // and the filename style ("cumberland-farms") so overrides route regardless of casing.
+  const chainToFile = {};
+  for(const f of files){
+    const vkey = (loaded[f].varName || '').replace(/Locations$/, '');   // e.g. cumberlandFarms
+    const fkey = f.replace(/-locations\.js$/, '');                      // e.g. cumberland-farms
+    [vkey, vkey.toLowerCase(), fkey, fkey.toLowerCase()].forEach(k => { if(k) chainToFile[k] = f; });
+  }
+
   // Apply.
   const changedFiles = new Set();
   const unmatched = [];
-  let applied = 0;
+  let applied = 0, created = 0;
   for(const id of overrideIds){
     const hit = byId[id];
-    if(!hit){ unmatched.push(id); continue; }
+    if(!hit){
+      // No existing record — treat as a NEW store if the override tells us its chain.
+      const ov = overrides[id];
+      const file = ov && ov.chain ? chainToFile[ov.chain] || chainToFile[String(ov.chain).toLowerCase()] : null;
+      if(!file){ unmatched.push(id); continue; }
+      if(!isValidCoord(ov.lat) || !isValidCoord(ov.lng)){
+        console.log('  SKIP new ' + id + ' (chain "' + ov.chain + '"): missing/invalid lat or lng');
+        unmatched.push(id); continue;
+      }
+      const rec = buildNewRecord(id, ov);
+      loaded[file].records.push(rec);
+      byId[id] = { file, record: rec };
+      changedFiles.add(file);
+      created++;
+      console.log('  + NEW ' + id + '  ->  ' + file + '  (' + (rec.n) + ')');
+      continue;
+    }
     const changes = applyOverride(hit.record, overrides[id]);
     if(changes.length){
       changedFiles.add(hit.file);
@@ -130,7 +170,7 @@ function main(){
     }
   }
 
-  console.log('\nDone. ' + applied + ' location(s) updated across ' + changedFiles.size + ' file(s).');
+  console.log('\nDone. ' + applied + ' updated, ' + created + ' created, across ' + changedFiles.size + ' file(s).');
   if(changedFiles.size) console.log('Updated files written to: ' + outDir);
   if(unmatched.length){
     console.log('\nWARNING: ' + unmatched.length + ' override(s) had no matching location and were skipped:');
