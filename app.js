@@ -83,7 +83,7 @@ document.getElementById('themeToggle').addEventListener('click', () => {
   });
 })();
 
-const map = L.map('map', { zoomControl: false, maxZoom: 19 }).setView([42.75, -73.80], 12);
+const map = L.map('map', { zoomControl: false, maxZoom: 19 }).setView([42.65123, -73.75176], 12);
 L.control.zoom({ position: 'bottomright' }).addTo(map);
 
 // Plain marker layer group — no clustering. We tried Leaflet.markercluster for a while, but
@@ -2086,6 +2086,8 @@ function updateAccountUI(){
   document.getElementById('loggedInView').style.display = loggedIn ? 'block' : 'none';
   const _cb = document.getElementById('communityBanner');
   if(_cb) _cb.style.display = loggedIn ? 'none' : '';   // banner is logged-out only
+  const _tt = document.getElementById('themeToggle');
+  if(_tt) _tt.style.display = loggedIn ? '' : 'none';   // light/dark toggle is a signed-in feature
   const accountBtn = document.getElementById('accountToggle');
   if(loggedIn){
     const email = window.__currentUser.email || '';
