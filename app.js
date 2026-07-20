@@ -249,7 +249,7 @@ function makeIcon(id){
   });
 }
 
-function emptyAgg(){ return {storeSum:0, storeCount:0, bathroomSum:0, bathroomCount:0, checkinCount:0}; }
+function emptyAgg(){ return {bathroomSum:0, bathroomCount:0}; }
 function emptyVote(){ return {store:0, bathroom:0, amenities:{}}; }
 function avgStr(sum, count){ return count > 0 ? (sum/count).toFixed(1) : '—'; }
 function ratingConfidenceHtml(count){
@@ -626,39 +626,6 @@ async function bumpAggregate(id, sumKey, sumDelta, countKey, countDelta){
   }
 }
 
-// Check-ins — a lightweight "I've been here" that doesn't require a star rating. Counted
-// once per person per location (re-checking in later just updates your timestamp, doesn't
-// inflate the count).
-async function hasCheckedIn(locId){
-  try{
-    const {db, doc, getDoc} = await fb();
-    const snap = await getDoc(doc(db, 'checkins', locId + '_' + getEffectiveId()));
-    return snap.exists();
-  }catch(e){
-    return false;
-  }
-}
-
-async function checkIn(loc){
-  // Deliberately no location/GPS check here — check-ins work from anywhere, unlike ratings
-  // (which stay geofenced). This is meant to be a low-friction "I've been here at some point"
-  // rather than a verified-visit action.
-  try{
-    const {db, doc, setDoc, increment} = await fb();
-    const myId = getEffectiveId();
-    const checkinRef = doc(db, 'checkins', loc.id + '_' + myId);
-    const alreadyIn = await hasCheckedIn(loc.id);
-    await setDoc(checkinRef, { locId: loc.id, clientId: myId, ts: Date.now() }, { merge: true });
-    if(!alreadyIn){
-      await setDoc(doc(db, 'aggregates', loc.id), { checkinCount: increment(1) }, { merge: true });
-    }
-    return { ok: true, alreadyIn };
-  }catch(e){
-    console.error('checkIn failed', e);
-    return { ok: false, reason: 'Something went wrong — try again.' };
-  }
-}
-
 // Personal record of your own vote (per-account if logged in, per-device otherwise)
 async function loadMyVote(id){
   try{
@@ -1026,52 +993,6 @@ function attachStoreToggleHandler(loc){
       // bottom — without this, the revealed content lands below the visible area and
       // looks like the tap did nothing.
       requestAnimationFrame(() => section.scrollIntoView({block:'nearest', behavior:'smooth'}));
-    }
-  });
-}
-
-function attachCheckinHandler(loc){
-  const btnOrig = document.getElementById('checkin-btn-' + loc.id);
-  const note = document.getElementById('checkin-note-' + loc.id);
-  if(!btnOrig) return;
-  const btn = btnOrig.cloneNode(true);
-  btnOrig.parentNode.replaceChild(btn, btnOrig);
-
-  btn.addEventListener('click', async () => {
-    btn.disabled = true;
-    btn.textContent = 'Checking in...';
-    if(note){ note.style.color = ''; note.textContent = ''; }
-    try{
-      const result = await checkIn(loc);
-      if(result.ok){
-        if(navigator.vibrate) navigator.vibrate(15);
-        btn.textContent = '✅ Checked in!';
-        if(note){
-          note.style.color = '#2f6b3c';
-          note.textContent = result.alreadyIn ? "Welcome back — you'd already checked in here before." : "You're on the map!";
-        }
-        // Refresh the count shown next to the button
-        const agg = ratingsCache[loc.id];
-        if(agg){
-          agg.checkinCount = (agg.checkinCount || 0) + (result.alreadyIn ? 0 : 1);
-          const countEl = document.querySelector(`.popup-inner[data-locid="${loc.id}"] .checkin-count`);
-          if(countEl) countEl.textContent = `${agg.checkinCount} check-in${agg.checkinCount === 1 ? '' : 's'}`;
-        }
-        setTimeout(() => {
-          btn.disabled = false;
-          btn.textContent = "✅ I've been here";
-        }, 2000);
-        checkAndUnlockAchievements();
-      } else {
-        btn.disabled = false;
-        btn.textContent = "✅ I've been here";
-        if(note){ note.style.color = '#c62828'; note.textContent = result.reason; }
-      }
-    }catch(e){
-      console.error('Check-in click handler error:', e);
-      btn.disabled = false;
-      btn.textContent = "✅ I've been here";
-      if(note){ note.style.color = '#c62828'; note.textContent = 'Something went wrong — try again.'; }
     }
   });
 }
@@ -1798,35 +1719,74 @@ map.on('zoomend', () => {
 // (loc.hours, set by an admin correction) which take precedence over the single
 // loc.hrs window. Each day's value is "24", "HHMM-HHMM", "closed", or missing (unknown).
 const HRS_DAY_KEYS = ['sun','mon','tue','wed','thu','fri','sat'];
-function todayHrsString(loc){
+// ---- Timezone-aware hours ----
+// Open/closed is computed in the LOCATION's timezone, not the visitor's. A location can carry
+// an explicit IANA `tz` (most precise); otherwise we approximate from longitude across the
+// continental-US bands. DST and overnight windows are handled correctly. Missing hours stay
+// "unknown" (never "closed").
+function tzForLocation(loc){
+  if(loc && loc.tz) return loc.tz;
+  const lng = parseFloat(loc && loc.lng);
+  if(isNaN(lng)) return 'America/New_York';
+  if(lng >= -87.5) return 'America/New_York';   // Eastern
+  if(lng >= -102)  return 'America/Chicago';     // Central
+  if(lng >= -115)  return 'America/Denver';      // Mountain
+  return 'America/Los_Angeles';                  // Pacific
+}
+const _tzFmtCache = {};
+function nowInLocationTz(loc){
+  const tz = tzForLocation(loc);
+  let fmt = _tzFmtCache[tz];
+  if(fmt === undefined){
+    try{ fmt = new Intl.DateTimeFormat('en-US', {timeZone:tz, weekday:'short', hour:'2-digit', minute:'2-digit', hour12:false}); }
+    catch(e){ fmt = null; }
+    _tzFmtCache[tz] = fmt;
+  }
+  if(!fmt){ const d = new Date(); return { day:d.getDay(), hhmm:d.getHours()*100 + d.getMinutes() }; }
+  const m = {};
+  fmt.formatToParts(new Date()).forEach(p => { m[p.type] = p.value; });
+  const dayMap = { Sun:0, Mon:1, Tue:2, Wed:3, Thu:4, Fri:5, Sat:6 };
+  let hour = parseInt(m.hour, 10); if(hour >= 24) hour -= 24;   // some engines render midnight as "24"
+  return { day: dayMap[m.weekday], hhmm: hour * 100 + parseInt(m.minute, 10) };
+}
+function hrsForDay(loc, dayIdx){
   if(loc && loc.hours && typeof loc.hours === 'object' && Object.keys(loc.hours).length){
-    const v = loc.hours[HRS_DAY_KEYS[new Date().getDay()]];
+    const v = loc.hours[HRS_DAY_KEYS[dayIdx]];
     return (v === undefined || v === null) ? null : v;
   }
   return (loc && loc.hrs != null) ? loc.hrs : null;
+}
+// The location's own "today" (used for display too) — its timezone, not the visitor's.
+function todayHrsString(loc){
+  return hrsForDay(loc, nowInLocationTz(loc).day);
+}
+function parseHrsString(hrs){
+  if(!hrs) return null;                       // unknown
+  if(hrs === '24') return { allDay:true };
+  if(hrs === 'closed') return { closed:true };
+  const p = hrs.split('-');
+  if(p.length !== 2) return null;
+  const o = parseInt(p[0], 10), c = parseInt(p[1], 10);
+  if(isNaN(o) || isNaN(c)) return null;
+  return { open:o, close:c };
 }
 
 // Open-now calculation — the effective hours string is "24", "HHMM-HHMM", "closed",
 // or empty/unknown (from todayHrsString, which also handles per-day hours).
 // Locations with no known hours are "unknown" and are never hidden by the open-now filter.
 function isLocationOpenNow(loc){
-  const hrs = todayHrsString(loc);
-  if(!hrs) return null; // unknown — we don't have hours data for this one yet
-  if(hrs === 'closed') return false;
-  if(hrs === '24') return true;
-  const parts = hrs.split('-');
-  if(parts.length !== 2) return null;
-  const open = parseInt(parts[0], 10);
-  const close = parseInt(parts[1], 10);
-  if(isNaN(open) || isNaN(close)) return null;
-  const now = new Date();
-  const nowVal = now.getHours() * 100 + now.getMinutes();
-  if(close > open){
-    return nowVal >= open && nowVal < close;
-  } else {
-    // overnight closing (e.g. closes 1am) — open spans midnight
-    return nowVal >= open || nowVal < close;
-  }
+  const { day, hhmm } = nowInLocationTz(loc);
+
+  // Still open from YESTERDAY's overnight window that runs past midnight (e.g. 1800-0200, now 0100)?
+  const y = parseHrsString(hrsForDay(loc, (day + 6) % 7));
+  if(y && y.open != null && y.close != null && y.close < y.open && hhmm < y.close) return true;
+
+  const t = parseHrsString(hrsForDay(loc, day));
+  if(t === null) return null;                                   // today's hours unknown → never "closed"
+  if(t.closed) return false;
+  if(t.allDay) return true;
+  if(t.close > t.open) return hhmm >= t.open && hhmm < t.close;  // normal same-day window
+  return hhmm >= t.open;                                         // overnight window — evening part (tail caught next day)
 }
 
 // Turns "0430-2400" into "4:30 AM – 12:00 AM", or "24" into "Open 24 hours"
