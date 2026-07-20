@@ -476,9 +476,9 @@ async function loadStoreFeatureSummary(locId){
 const storeQuips = {
   1: ["Regret.", "Bold choice.", "Lost Cause.", "Keep driving.", "Ain't it."],
   2: ["It's open.", "Not their best work.", "Needs Improvement.", "Quick stop.", "Mid."],
-  3: ["It'll do.", "Exactly as expected.", "Reliable Stop.", "Solid Stewart's.", "Respectable."],
+  3: ["It'll do.", "Exactly as expected.", "Reliable Stop.", "Solid rest stop.", "Respectable."],
   4: ["Nice surprise.", "Pretty good.", "Local Favorite.", "One of the good ones.", "Certified good."],
-  5: ["I'd come back.", "Nailed it.", "Legendary.", "Destination Stewart's.", "No notes."]
+  5: ["I'd come back.", "Nailed it.", "Legendary.", "Destination Stop.", "No notes."]
 };
 const bathroomQuips = {
   1: ["Thoughts and prayers.", "Character building.", "Hazard Zone.", "Use the woods.", "Absolutely not."],
@@ -1204,7 +1204,7 @@ async function attachAmenityHandlers(loc){
 
     const verification = await verifyNearby(loc);
     if(!verification.ok){
-      if(note){ note.style.color = '#c62828'; note.textContent = "📍 You need to be at this Stewart's to report its features."; }
+      if(note){ note.style.color = '#c62828'; note.textContent = "📍 You need to be at this stop to report its features."; }
       allBtns.forEach(b => b.disabled = false);
       return;
     }
@@ -1255,7 +1255,7 @@ async function attachStoreFeatureHandlers(loc){
 
     const verification = await verifyNearby(loc);
     if(!verification.ok){
-      if(note){ note.style.color = '#c62828'; note.textContent = "📍 You need to be at this Stewart's to report its features."; }
+      if(note){ note.style.color = '#c62828'; note.textContent = "📍 You need to be at this stop to report its features."; }
       allBtns.forEach(b => b.disabled = false);
       return;
     }
@@ -1350,7 +1350,7 @@ const ACHIEVEMENT_DEFS = [
     calc: (s) => ({ done: s.bathroomRatedCount >= 25, current: Math.min(s.bathroomRatedCount,25), total:25 }) },
   { key:'royalFlush', icon:'👑', name:'Royal Flush', desc:'Give five different bathrooms a 5-star rating',
     calc: (s) => ({ done: s.fiveStarCount >= 5, current: Math.min(s.fiveStarCount,5), total:5 }) },
-  { key:'roadWarrior', icon:'🛣️', name:'Road Warrior', desc:"Check in at 50 different Stewart's locations",
+  { key:'roadWarrior', icon:'🛣️', name:'Road Warrior', desc:"Check in at 50 different locations",
     calc: (s) => ({ done: s.checkinCount >= 50, current: Math.min(s.checkinCount,50), total:50 }) },
   { key:'hiddenGemHunter', icon:'💎', name:'Hidden Gem Hunter', desc:'Review a location that had fewer than 5 bathroom reviews at the time',
     calc: (s) => ({ done: s.hiddenGemCount >= 1, current: Math.min(s.hiddenGemCount,1), total:1 }) },
@@ -1648,8 +1648,8 @@ function attachStarHandlers(loc){
           if(note){
             note.style.color = '#c62828';
             note.textContent = verification.reason === 'no-location'
-              ? '📍 Enable location to verify you\'re at this Stewart\'s before rating.'
-              : `📍 You need to be at this Stewart's to rate it (you're ${verification.distance.toFixed(1)} mi away).`;
+              ? '📍 Enable location to verify you\'re at this Bathroom before rating.'
+              : `📍 You need to be at this Bathroom to rate it (you're ${verification.distance.toFixed(1)} mi away).`;
           }
           return;
         }
