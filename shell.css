@@ -304,3 +304,10 @@ body.list-open #communityBanner { display:none !important; }
 /* Light/dark is a signed-in feature — hide the whole row (emoji + label) when logged out. */
 body:not(.logged-in) #appDrawer #themeToggle{ display:none !important; }
 #appDrawer #themeToggle:active{ background:var(--shell-chrome2) !important; }
+
+
+/* ---------- X + Cash App icon row in the FAQ / How-it-works page ---------- */
+.hiw-social-row{ display:flex; gap:14px; align-items:center; margin-top:6px; }
+.hiw-social-row a{ display:inline-flex; }
+.hiw-social-row img{ width:46px; height:46px; border-radius:12px; display:block; border:1px solid rgba(255,255,255,.12); }
+.hiw-social-row a:active{ opacity:.8; }
