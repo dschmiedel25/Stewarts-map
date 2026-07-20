@@ -3,10 +3,11 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    // ============================================================
-    //  Shared helpers
-    // ============================================================
-    function signedIn() { return request.auth != null; }
+    // ---------- Shared helpers ----------
+
+    function signedIn() {
+      return request.auth != null;
+    }
 
     function isAdmin() {
       return signedIn()
@@ -14,22 +15,22 @@ service cloud.firestore {
         && get(/databases/$(database)/documents/admins/$(request.auth.uid)).data.enabled != false;
     }
 
-    // A community write must belong to the signed-in caller: the doc's clientId field
-    // must equal their uid. (getEffectiveId() on the client returns the uid when signed in,
-    // and every community write is sign-in-gated in the app UI.)
-    function ownedByCaller() {
-      return signedIn() && request.resource.data.clientId == request.auth.uid;
-    }
-
-    // Public submissions may not set moderator-only workflow fields.
+    // Public submissions may not create moderator-only workflow fields.
     function hasNoModeratorFields() {
       return !request.resource.data.keys().hasAny([
-        'moderatorNote','moderatorNotes','resolvedAt','resolvedBy',
-        'dismissedAt','dismissedBy','closedAt','closedBy','updatedByAdmin'
+        'moderatorNote',
+        'moderatorNotes',
+        'resolvedAt',
+        'resolvedBy',
+        'dismissedAt',
+        'dismissedBy',
+        'closedAt',
+        'closedBy',
+        'updatedByAdmin'
       ]);
     }
 
-    // Public submissions may omit status; if present it must start as pending.
+    // Existing app submissions may omit status. If included, it must begin as pending.
     function startsPending() {
       return !request.resource.data.keys().hasAny(['status'])
         || request.resource.data.status == 'pending';
@@ -38,121 +39,95 @@ service cloud.firestore {
     // Only recognized workflow states may be saved by FlushPanel.
     function validReportStatus() {
       return !request.resource.data.keys().hasAny(['status'])
-        || request.resource.data.status in ['pending','resolved','dismissed'];
+        || request.resource.data.status in [
+          'pending',
+          'resolved',
+          'dismissed'
+        ];
     }
 
 
-    // ============================================================
-    //  Administrator authorization (managed from the Firebase Console)
-    // ============================================================
+    // ---------- Administrator authorization ----------
+
+    // Admin records are maintained from the Firebase Console.
+    // Existing admins may read them, but cannot add/remove admins through the website.
     match /admins/{uid} {
       allow read: if isAdmin();
-      allow write: if false;   // no one can grant themselves admin from a client
+      allow write: if false;
     }
 
 
-    // ============================================================
-    //  Community ratings
-    // ============================================================
-    // Anyone may READ ratings. Writing requires sign-in AND the doc must be the caller's
-    // own vote: its id is "<locId>_<uid>" and its clientId is the caller's uid. This blocks
-    // forging votes or overwriting someone else's rating.
+    // ---------- Existing public app data ----------
+    //
+    // These remain publicly writable so this ruleset works with your current
+    // no-login app. They should eventually move to anonymous Firebase Auth
+    // and owner-restricted writes.
+
     match /votes/{id} {
-      allow read: if true;
-      allow create, update: if ownedByCaller()
-        && id == request.resource.data.locId + '_' + request.auth.uid;
-      allow delete: if signedIn() && resource.data.clientId == request.auth.uid;
+      allow read, write: if true;
     }
 
-
-    // ============================================================
-    //  Aggregate rating totals
-    // ============================================================
-    // Rating totals are written ONLY by the recomputeBathroomAggregate Cloud Function (admin
-    // privileges bypass rules). No client may write them — they're derived from vote docs
-    // server-side, so they can't be forged or tampered with.
     match /aggregates/{id} {
-      allow read: if true;
-      allow write: if false;
+      allow read, write: if true;
     }
 
-
-    // ============================================================
-    //  Visitor tips
-    // ============================================================
     match /tips/{id} {
-      allow read: if true;
-      allow write: if signedIn();
+      allow read, write: if true;
     }
 
-
-    // ============================================================
-    //  Community activity log (feeds recap/most-recent)
-    // ============================================================
-    match /activity/{id} {
-      allow read: if true;
-      allow write: if signedIn();
-    }
-
-
-    // ============================================================
-    //  Per-user achievement progress
-    // ============================================================
-    // Each doc is keyed by the owner's uid; only that user may write their own.
-    match /achievements/{id} {
-      allow read: if true;
-      allow write: if signedIn() && id == request.auth.uid;
-    }
-
-
-    // ============================================================
-    //  Check-ins (retired)
-    // ============================================================
-    // The app no longer creates check-ins. Reads stay open for any legacy path; all new
-    // writes are blocked.
     match /checkins/{id} {
-      allow read: if true;
-      allow write: if false;
+      allow read, write: if true;
+    }
+
+    match /activity/{id} {
+      allow read, write: if true;
+    }
+
+    match /achievements/{id} {
+      allow read, write: if true;
     }
 
 
-    // ============================================================
-    //  Location overrides (admin corrections)
-    // ============================================================
-    // The public app reads these to apply corrected hours/addresses/coordinates.
-    // Only admins (FlushPanel) may create or change them.
-    match /overrides/{id} {
-      allow read: if true;
-      allow write: if isAdmin();
-    }
+    // ---------- App and location reports ----------
 
-
-    // ============================================================
-    //  Reports (public submit, admin moderate)
-    // ============================================================
+    // Visitors may submit reports, but may not assign moderation outcomes
+    // or write moderator-only audit fields.
+    //
+    // FlushPanel may read, update, resolve, dismiss, reopen, or delete them.
     match /reports/{id} {
-      allow create: if startsPending() && hasNoModeratorFields();
-      allow read:   if isAdmin();
-      allow update: if isAdmin() && validReportStatus();
+      allow create: if startsPending()
+        && hasNoModeratorFields();
+
+      allow read: if isAdmin();
+
+      allow update: if isAdmin()
+        && validReportStatus();
+
       allow delete: if isAdmin();
     }
 
 
-    // ============================================================
-    //  Missing-location submissions (public submit, admin moderate)
-    // ============================================================
+    // ---------- Missing-location submissions ----------
+
     match /missingReports/{id} {
-      allow create: if startsPending() && hasNoModeratorFields();
-      allow read:   if isAdmin();
-      allow update: if isAdmin() && validReportStatus();
+      allow create: if startsPending()
+        && hasNoModeratorFields();
+
+      allow read: if isAdmin();
+
+      allow update: if isAdmin()
+        && validReportStatus();
+
       allow delete: if isAdmin();
     }
 
 
-    // ============================================================
-    //  Moderation blocklist
-    // ============================================================
-    // The app may check one known document id, but cannot download the whole list.
+
+    // ---------- Moderation blocklists ----------
+
+    // The public app may check one known document ID, but cannot download
+    // the entire blocklist. FlushPanel can read/list and manage all records.
+
     match /blockedDevices/{id} {
       allow get: if true;
       allow list: if isAdmin();
@@ -160,9 +135,9 @@ service cloud.firestore {
     }
 
 
-    // ============================================================
-    //  Default deny — anything not listed above is inaccessible
-    // ============================================================
+    // ---------- Default deny ----------
+
+    // Any collection not explicitly listed above is inaccessible.
     match /{document=**} {
       allow read, write: if false;
     }
