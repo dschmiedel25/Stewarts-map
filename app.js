@@ -2086,8 +2086,7 @@ function updateAccountUI(){
   document.getElementById('loggedInView').style.display = loggedIn ? 'block' : 'none';
   const _cb = document.getElementById('communityBanner');
   if(_cb) _cb.style.display = loggedIn ? 'none' : '';   // banner is logged-out only
-  const _tt = document.getElementById('themeToggle');
-  if(_tt) _tt.style.display = loggedIn ? '' : 'none';   // light/dark toggle is a signed-in feature
+  document.body.classList.toggle('logged-in', loggedIn);   // gates signed-in-only UI (theme toggle, etc.)
   const accountBtn = document.getElementById('accountToggle');
   if(loggedIn){
     const email = window.__currentUser.email || '';
