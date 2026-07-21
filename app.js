@@ -23,7 +23,8 @@ const CHAIN_REGISTRY = {
   racetrac: { name: "RaceTrac", color: '#00205b', textColor: '#ffffff', dataVar: 'racetracLocations' },
   pilotFlyingJ: { name: "Pilot Flying J", color: '#fdb913', textColor: '#1c1c1e', dataVar: 'pilotLocations' },
   maverik: { name: "Maverik", color: '#c4122f', textColor: '#ffffff', dataVar: 'maverikLocations' },
-  quiktrip: { name: "QuikTrip", color: '#ed1c24', textColor: '#ffffff', dataVar: 'quiktripLocations' }
+  quiktrip: { name: "QuikTrip", color: '#ed1c24', textColor: '#ffffff', dataVar: 'quiktripLocations' },
+  loves: { name: "Love's", color: '#e4002b', textColor: '#ffffff', dataVar: 'lovesLocations' }
 };
 const DEFAULT_CHAIN_KEY = 'stewarts';
 
