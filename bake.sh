@@ -7,10 +7,14 @@ if ls baked/*-locations.js >/dev/null 2>&1; then
 else
   echo "Nothing baked. Done."; exit 0
 fi
+# Only stage the location files — never touch functions/config/other files.
+git add ./*-locations.js
+if git diff --cached --quiet; then
+  echo "No location changes to commit. Done."; exit 0
+fi
 if git status --porcelain | grep -qi "serviceAccountKey\|overrides.json"; then
   echo ""; echo "🛑 STOP: a secret file is staged. Not committing."; exit 1
 fi
-git add -A
 git commit -m "Weekly bake of location overrides"
 git push
 echo ""; echo "✅ Baked, committed, pushed."
