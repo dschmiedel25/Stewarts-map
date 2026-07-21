@@ -1,4 +1,4 @@
-const CACHE_NAME = 'bathroomreport-v60';
+const CACHE_NAME = 'bathroomreport-v61';
 const APP_SHELL = [
   './',
   './index.html',
@@ -19,6 +19,7 @@ const APP_SHELL = [
   './racetrac-locations.js',
   './pilot-locations.js',
   './maverik-locations.js',
+  './quiktrip-locations.js',
   './app.js',
   './manifest.webmanifest'
 ];

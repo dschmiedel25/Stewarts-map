@@ -22,7 +22,8 @@ const CHAIN_REGISTRY = {
   sheetz: { name: "Sheetz", color: '#ee3124', textColor: '#ffffff', dataVar: 'sheetzLocations' },
   racetrac: { name: "RaceTrac", color: '#00205b', textColor: '#ffffff', dataVar: 'racetracLocations' },
   pilotFlyingJ: { name: "Pilot Flying J", color: '#fdb913', textColor: '#1c1c1e', dataVar: 'pilotLocations' },
-  maverik: { name: "Maverik", color: '#c4122f', textColor: '#ffffff', dataVar: 'maverikLocations' }
+  maverik: { name: "Maverik", color: '#c4122f', textColor: '#ffffff', dataVar: 'maverikLocations' },
+  quiktrip: { name: "QuikTrip", color: '#ed1c24', textColor: '#ffffff', dataVar: 'quiktripLocations' }
 };
 const DEFAULT_CHAIN_KEY = 'stewarts';
 
@@ -1957,17 +1958,18 @@ document.getElementById('chainFilterBody')?.addEventListener('change', (e) => {
 renderChainFilter();
 applyFilters();
 
-// "Open now" filter — a left pill on the map. Active by default → the map shows only
-// open + unknown-hours locations; tapping it off also reveals confirmed-closed ones.
-// It drives the same `showAllLocations` state the old ☰ "Show all" toggle used (inverted:
-// Open now ON == showAllLocations false).
+// Closed-locations filter — a left pill on the map. On by default → the map hides
+// confirmed-closed spots (open + unknown-hours stay visible). Tapping it off shows
+// everything, including confirmed-closed. Drives the same `showAllLocations` state.
+// The label itself changes with the state so on/off is unambiguous.
 (function(){
   const t = document.getElementById('openNowToggle');
   if(!t) return;
   const sync = () => {
-    const filtering = !showAllLocations;          // Open now is "on" when we're hiding closed
+    const filtering = !showAllLocations;          // filtering = confirmed-closed hidden
     t.classList.toggle('active', filtering);
     t.setAttribute('aria-pressed', String(filtering));
+    t.textContent = filtering ? '🚫 Hiding closed' : '👁 Showing all';
   };
   sync();
   t.addEventListener('click', () => {
