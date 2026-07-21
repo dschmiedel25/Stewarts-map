@@ -43,6 +43,13 @@ Object.keys(CHAIN_REGISTRY).forEach(chainKey => {
 const locationsById = {};
 seedLocations.forEach(loc => { locationsById[loc.id] = loc; });
 
+// Total location count shown in the menu (hamburger) drawer footer, above the version.
+// Derived from the merged list so it stays correct automatically when chains are added.
+(function(){
+  const el = document.getElementById('drawerLocCount');
+  if(el) el.textContent = `${seedLocations.length.toLocaleString()} locations mapped`;
+})();
+
 // Theme: defaults to the phone's system light/dark setting, but a manual toggle overrides it
 function applyTheme(theme){
   document.documentElement.setAttribute('data-theme', theme);
