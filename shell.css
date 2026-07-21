@@ -79,7 +79,20 @@
 #map{ background:#20242a; }
 
 /* ---------- Open Now pill dropped — map is open-by-default now ---------- */
-#openNowToggle{ display:none !important; }
+/* "Open now" filter — left pill under Chains, matching the other shell pills.
+   .active = filtering to open (confirmed-closed hidden); inactive = showing all. */
+#openNowToggle{
+  position:static !important; align-self:flex-start !important;
+  display:inline-flex; align-items:center; gap:6px;
+  background:var(--shell-chrome) !important; color:var(--shell-ink) !important;
+  border:1px solid var(--shell-line) !important; border-radius:14px !important;
+  padding:6px 14px !important; font-size:14px !important; font-weight:800 !important;
+  box-shadow:var(--shell-shadow) !important; width:auto !important;
+  white-space:nowrap; cursor:pointer;
+}
+#openNowToggle.active{
+  background:#2e7d32 !important; border-color:#2e7d32 !important; color:#fff !important;
+}
 
 /* ---------- Right rail: Where Am I? (icon-only) + List ---------- */
 #whereAmIBtn{
@@ -106,7 +119,7 @@
 
 /* ---------- Legend + Chains: bottom-left stack ---------- */
 #topLeftControls{
-  position:absolute !important; left:12px !important; top:70px !important; bottom:auto !important;
+  position:absolute !important; left:12px !important; top:54px !important; bottom:auto !important;
   z-index:600 !important; display:flex; flex-direction:column; gap:10px; max-width:60%;
 }
 #legend, #chainFilter{
@@ -141,7 +154,7 @@
 /* ---------- "Missing a location?" : slim pill, top-left ---------- */
 #missingBtn{
   position:absolute !important; left:12px !important; right:auto !important;
-  top:28px !important; bottom:auto !important;
+  top:12px !important; bottom:auto !important;
   z-index:600 !important;
   background:var(--shell-chrome) !important; color:var(--shell-muted) !important;
   border:1px solid var(--shell-line) !important; border-radius:999px !important;
@@ -273,7 +286,7 @@ body.list-open #communityBanner { display:none !important; }
 
 /* ---------- "We Missed One?" form: drop it right under its button (top-left), not the bottom ---------- */
 #missingPanel{
-  position:absolute !important; left:12px !important; top:72px !important;
+  position:absolute !important; left:12px !important; top:56px !important;
   right:auto !important; bottom:auto !important;
   z-index:700 !important; width:min(82vw, 300px) !important;
 }

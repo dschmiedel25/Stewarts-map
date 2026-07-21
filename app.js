@@ -1957,16 +1957,22 @@ document.getElementById('chainFilterBody')?.addEventListener('change', (e) => {
 renderChainFilter();
 applyFilters();
 
-// "Show all locations" lives in the ☰ menu now. Off by default → the map shows only
-// open + unknown-hours locations; on → also reveals confirmed-closed ones.
+// "Open now" filter — a left pill on the map. Active by default → the map shows only
+// open + unknown-hours locations; tapping it off also reveals confirmed-closed ones.
+// It drives the same `showAllLocations` state the old ☰ "Show all" toggle used (inverted:
+// Open now ON == showAllLocations false).
 (function(){
-  const t = document.getElementById('showAllToggle');
+  const t = document.getElementById('openNowToggle');
   if(!t) return;
+  const sync = () => {
+    const filtering = !showAllLocations;          // Open now is "on" when we're hiding closed
+    t.classList.toggle('active', filtering);
+    t.setAttribute('aria-pressed', String(filtering));
+  };
+  sync();
   t.addEventListener('click', () => {
     showAllLocations = !showAllLocations;
-    t.classList.toggle('on', showAllLocations);
-    const sub = document.getElementById('showAllSub');
-    if(sub) sub.textContent = showAllLocations ? 'Showing all locations' : 'Hiding closed locations';
+    sync();
     applyFilters();
   });
 })();
