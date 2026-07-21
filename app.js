@@ -24,7 +24,8 @@ const CHAIN_REGISTRY = {
   pilotFlyingJ: { name: "Pilot Flying J", color: '#fdb913', textColor: '#1c1c1e', dataVar: 'pilotLocations' },
   maverik: { name: "Maverik", color: '#c4122f', textColor: '#ffffff', dataVar: 'maverikLocations' },
   quiktrip: { name: "QuikTrip", color: '#ed1c24', textColor: '#ffffff', dataVar: 'quiktripLocations' },
-  loves: { name: "Love's", color: '#e4002b', textColor: '#ffffff', dataVar: 'lovesLocations' }
+  loves: { name: "Love's", color: '#e4002b', textColor: '#ffffff', dataVar: 'lovesLocations' },
+  bucees: { name: "Buc-ee's", color: '#ffd200', textColor: '#1c1c1e', dataVar: 'buceesLocations' }
 };
 const DEFAULT_CHAIN_KEY = 'stewarts';
 
@@ -2266,7 +2267,7 @@ function bathroomNowCard(result,fallback=false){
   // Filled chain pill so you can see which brand this is at a glance, colored from the registry.
   const chain=CHAIN_REGISTRY[result.loc.chain]||{};
   const chainBadge=chain.name?`<div class="now-chain-badge" style="background:${chain.color};color:${chain.textColor};">${escapeHtml(chain.name)}</div>`:'';
-  return `<div class="bathroom-now-card"><button class="bathroom-now-close" id="bathroom-now-close" title="Close">✕</button><div class="now-title">🚽 ${fallback?'Closest location':'Closest bathroom by driving distance'}</div>${chainNote}${chainBadge}<b>${result.loc.n}</b><br>${distance}${duration}<br>${open===true?'🟢 Open now':open===false?'🔴 Closed now':'⚪ Hours unavailable'}<br>🚻 ${avgStr(agg.bathroomSum,agg.bathroomCount)}★ · ${agg.bathroomCount} rating${agg.bathroomCount===1?'':'s'}${lastRatedNote}${hoursMissingNote}<div class="now-actions"><button class="btn btn-primary" id="bathroom-now-directions">🧭 Get Directions</button><button class="btn btn-secondary" id="bathroom-now-view">View pin</button></div></div>`;
+  return `<div class="bathroom-now-card"><button class="bathroom-now-close" id="bathroom-now-close" title="Close">✕</button><div class="now-title">🚽 ${fallback?'Closest location':'Closest bathroom by driving distance'}</div>${chainNote}${chainBadge}<b>${result.loc.n}</b><br>${distance}${duration}<br>${open===true?'🟢 Open now':open===false?'🔴 Closed now':'⚪ Hours unavailable'}<br>🚻 ${avgStr(agg.bathroomSum,agg.bathroomCount)}★ · ${agg.bathroomCount} rating${agg.bathroomCount===1?'':'s'}${lastRatedNote}${hoursMissingNote}<div class="now-actions"><button class="btn btn-primary" id="bathroom-now-directions">🧭 Get Directions</button><button class="btn btn-secondary" id="bathroom-now-view">Details</button></div></div>`;
 }
 let userMarker=null;
 const whereAmIBtn=document.getElementById('whereAmIBtn');
@@ -2323,7 +2324,10 @@ function showBathroomNowResult(result,fallback=false){
     else map.setView([result.loc.lat,result.loc.lng],16,{animate:false});  // marker not built yet — center the map anyway
   };
   document.getElementById('bathroom-now-directions').onclick=()=>{window.open(buildNavUrl(resolveNavApp(),result.loc.lat,result.loc.lng),'_blank','noopener');};
-  zoomToMarker(markers[result.loc.id]);
+  // Center the map on the result, but DON'T auto-open its pin popup — the Bathroom Now card is the
+  // primary readout (it carries the "nothing selected nearby" callout). Opening the popup on top
+  // duplicated the info and buried the card. "View pin" still opens the full popup on demand.
+  map.setView([result.loc.lat, result.loc.lng], 16, { animate: false });
 }
 locateBtn.addEventListener('click',()=>{
   if(suppressNextLocateClick)return;
