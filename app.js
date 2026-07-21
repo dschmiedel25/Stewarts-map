@@ -20,7 +20,9 @@ const CHAIN_REGISTRY = {
   byrneDairy: { name: "Byrne Dairy", color: '#be1e2d', textColor: '#ffffff', dataVar: 'byrneDairyLocations' },
   parkers: { name: "Parker's", color: '#005ca9', textColor: '#ffffff', dataVar: 'parkersLocations' },
   sheetz: { name: "Sheetz", color: '#ee3124', textColor: '#ffffff', dataVar: 'sheetzLocations' },
-  racetrac: { name: "RaceTrac", color: '#00205b', textColor: '#ffffff', dataVar: 'racetracLocations' }
+  racetrac: { name: "RaceTrac", color: '#00205b', textColor: '#ffffff', dataVar: 'racetracLocations' },
+  pilotFlyingJ: { name: "Pilot Flying J", color: '#fdb913', textColor: '#1c1c1e', dataVar: 'pilotLocations' },
+  maverik: { name: "Maverik", color: '#c4122f', textColor: '#ffffff', dataVar: 'maverikLocations' }
 };
 const DEFAULT_CHAIN_KEY = 'stewarts';
 
