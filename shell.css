@@ -207,7 +207,7 @@
 #appDrawer .d-brand img{ width:40px; height:40px; object-fit:contain; }
 #appDrawer .d-brand b{ font-size:16px; font-weight:900; letter-spacing:.02em; color:var(--shell-ink); font-family:var(--font-display); }
 #appDrawer .d-brand b .wm-accent{ color:var(--accent); }
-#appDrawer .d-items{ display:flex; flex-direction:column; padding:8px 0; flex:1; }
+#appDrawer .d-items{ display:flex; flex-direction:column; padding:8px 0; flex:1; min-height:0; overflow-y:auto; -webkit-overflow-scrolling:touch; }
 /* All drawer rows share one left-aligned layout so icons + labels line up */
 #appDrawer .d-items button{
   position:static !important; width:100% !important; display:flex !important; align-items:center;
@@ -387,16 +387,29 @@ body:not(.logged-in) #appDrawer #navAppPref{ display:none !important; }
 #appDrawer .d-section-label{
   font-size:15px; font-weight:700; color:var(--shell-ink); margin-bottom:10px;
 }
-#appDrawer .nav-pref-choices{ display:flex; gap:8px; }
-#appDrawer .nav-pref-btn{
-  flex:1; padding:9px 6px; border-radius:12px; cursor:pointer;
+/* Directions-app dropdown, themed to match the drawer (native select, styled control) */
+#appDrawer .nav-pref-select{
+  width:100%; padding:11px 12px; border-radius:12px; cursor:pointer;
   background:var(--shell-chrome2); color:var(--shell-ink);
-  border:1px solid var(--shell-line); font-size:12.5px; font-weight:700; white-space:nowrap;
+  border:1px solid var(--shell-line); font-size:15px; font-weight:700;
+  -webkit-appearance:none; appearance:none;
+  background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='%23f6f8fa' stroke-width='3'><path d='M6 9l6 6 6-6'/></svg>");
+  background-repeat:no-repeat; background-position:right 12px center;
 }
-#appDrawer .nav-pref-btn.active{
-  background:var(--accent); color:var(--accent-ink); border-color:var(--accent);
+#appDrawer .nav-pref-select:focus{ outline:none; border-color:var(--accent); }
+/* "Select all chains" trigger at the top of the Chains list */
+#appDrawer .chain-all-btn{
+  display:block; width:calc(100% - 40px); margin:2px 20px 8px; padding:9px 12px;
+  border-radius:10px; cursor:pointer; text-align:center;
+  background:color-mix(in srgb, var(--accent) 16%, transparent);
+  color:var(--accent); border:1px solid color-mix(in srgb, var(--accent) 40%, transparent);
+  font-size:13.5px; font-weight:800;
 }
-#appDrawer .nav-pref-btn:active{ opacity:.85; }
+#appDrawer .chain-all-btn:active{ opacity:.85; }
+#appDrawer .chain-all-btn:disabled{
+  background:transparent; color:var(--shell-muted);
+  border-color:var(--shell-line); cursor:default; font-weight:700;
+}
 
 /* ---------- Chain badge in the Bathroom Now card (below the callout, above the name) ---------- */
 #nearestInfo .now-chain-badge{

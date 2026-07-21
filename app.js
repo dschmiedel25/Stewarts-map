@@ -1984,7 +1984,9 @@ function renderChainFilter(){
     wrap.style.display = 'none';
     return;
   }
-  body.innerHTML = chainKeys.map(key => {
+  const allOn = chainKeys.every(k => activeChains.has(k));
+  const allBtn = `<button type="button" class="chain-all-btn" id="chainSelectAll"${allOn?' disabled':''}>${allOn?'✓ All chains shown':'Select all chains'}</button>`;
+  body.innerHTML = allBtn + chainKeys.map(key => {
     const chain = CHAIN_REGISTRY[key];
     const checked = activeChains.has(key) ? 'checked' : '';
     return `<label class="chain-filter-row">
@@ -1993,6 +1995,16 @@ function renderChainFilter(){
     </label>`;
   }).join('');
 }
+
+// "Select all chains" — re-enable every chain at once (clears the disable list).
+document.getElementById('chainFilterBody')?.addEventListener('click', (e) => {
+  if(!e.target.closest('#chainSelectAll')) return;
+  disabledChains.clear();
+  activeChains = getActiveChains();
+  saveDisabledChains();
+  renderChainFilter();
+  applyFilters();
+});
 
 document.getElementById('chainFilterBody')?.addEventListener('change', (e) => {
   const cb = e.target.closest('.chain-filter-checkbox');
@@ -2007,6 +2019,7 @@ document.getElementById('chainFilterBody')?.addEventListener('change', (e) => {
     cb.checked = true;
   }
   saveDisabledChains();
+  renderChainFilter();
   applyFilters();
 });
 
@@ -2036,15 +2049,12 @@ applyFilters();
 // Directions-app preference (drawer, signed-in only). The highlighted button reflects the app
 // that will actually open — the explicit saved choice, or the device default when none is set.
 function renderNavPref(){
-  const wrap = document.getElementById('navAppPref');
-  if(!wrap) return;
-  const active = resolveNavApp();
-  wrap.querySelectorAll('.nav-pref-btn').forEach(b => b.classList.toggle('active', b.dataset.app === active));
+  const sel = document.getElementById('navAppSelect');
+  if(!sel) return;
+  sel.value = resolveNavApp();   // reflect the active app (explicit choice or device default)
 }
-document.getElementById('navAppPref')?.addEventListener('click', (e) => {
-  const b = e.target.closest('.nav-pref-btn');
-  if(!b) return;
-  localStorage.setItem('preferredNavApp', b.dataset.app);
+document.getElementById('navAppSelect')?.addEventListener('change', (e) => {
+  localStorage.setItem('preferredNavApp', e.target.value);
   renderNavPref();
 });
 renderNavPref();
