@@ -1604,7 +1604,7 @@ window.cumberlandFarmsLocations = [
     "addr": "3898 Main Street, Warrensburg, NY, 12885",
     "id": "way-1120884128",
     "chain": "cumberlandFarms",
-    "hrs": ""
+    "hrs": "24"
   },
   {
     "n": "Knollwood Drive, Canterbury",
@@ -1748,7 +1748,7 @@ window.cumberlandFarmsLocations = [
     "addr": "2 Chatham Street, Nassau, NY, 12123",
     "id": "way-106318075",
     "chain": "cumberlandFarms",
-    "hrs": ""
+    "hrs": "24"
   },
   {
     "n": "State Street, Schenectady",
@@ -1937,7 +1937,7 @@ window.cumberlandFarmsLocations = [
     "addr": "19 Spring Street, Schuylerville, NY, 12871",
     "id": "way-817057246",
     "chain": "cumberlandFarms",
-    "hrs": ""
+    "hrs": "24"
   },
   {
     "n": "Geyser Road, Ballston Spa",
@@ -2450,7 +2450,7 @@ window.cumberlandFarmsLocations = [
     "addr": "77 South Central Avenue, Mechanicville, NY, 12118",
     "id": "node-1568380818",
     "chain": "cumberlandFarms",
-    "hrs": ""
+    "hrs": "24"
   },
   {
     "n": "Main Street, Monroe",
@@ -2747,7 +2747,7 @@ window.cumberlandFarmsLocations = [
     "addr": "Miller Hill Road, Averill Park, NY",
     "id": "way-62255024",
     "chain": "cumberlandFarms",
-    "hrs": ""
+    "hrs": "24"
   },
   {
     "n": "Main Street",
@@ -3926,7 +3926,7 @@ window.cumberlandFarmsLocations = [
     "id": "node-677219788",
     "chain": "cumberlandFarms",
     "addr": "US 9W, Town of Coeymans, NY 12143",
-    "hrs": ""
+    "hrs": "24"
   },
   {
     "n": "Cumberland Farms",
