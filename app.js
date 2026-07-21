@@ -266,6 +266,21 @@ function makeIcon(id){
 
 function emptyAgg(){ return {bathroomSum:0, bathroomCount:0}; }
 function emptyVote(){ return {store:0, bathroom:0, amenities:{}}; }
+// Resize a marker whose popup is OPEN without calling setIcon(): swapping the icon element
+// out from under an open popup can break/close it on some mobile browsers, so instead we
+// mutate the existing icon element's size in place. Keeps the selected pin in sync with the
+// zoom level (otherwise it stays frozen at whatever size it was when the popup opened).
+function resizeOpenMarkerIcon(marker){
+  const el = marker && marker._icon;
+  if(!el) return;
+  const size = sizesForZoom(map.getZoom()).rated;
+  el.style.width = size + 'px';
+  el.style.height = size + 'px';
+  el.style.marginLeft = (-size / 2) + 'px';
+  el.style.marginTop = (-size / 2) + 'px';
+  const dot = el.firstElementChild;
+  if(dot){ dot.style.width = size + 'px'; dot.style.height = size + 'px'; }
+}
 function avgStr(sum, count){ return count > 0 ? (sum/count).toFixed(1) : '—'; }
 function ratingConfidenceHtml(count){
   if(!count) return '<span class="rating-confidence">Not yet rated</span>';
@@ -1739,7 +1754,9 @@ document.getElementById('onboardingClose').addEventListener('click', () => {
 map.on('zoomend', () => {
   seedLocations.forEach(loc => {
     const m = markers[loc.id];
-    if(m && !m.isPopupOpen()) m.setIcon(makeIcon(loc.id));
+    if(!m) return;
+    if(m.isPopupOpen()) resizeOpenMarkerIcon(m); // resize in place; never swap icon on an open popup
+    else m.setIcon(makeIcon(loc.id));
   });
 });
 
