@@ -145,11 +145,24 @@
 /* Bathroom Now result readout sits just above the bar */
 #nearestInfo{
   position:fixed !important; left:12px !important; right:12px !important;
+  top:auto !important;                    /* release the old styles.css top:224px so the card hugs its content */
   bottom:calc(env(safe-area-inset-bottom) + 82px) !important; z-index:640 !important;
+  max-width:none !important;              /* override old styles.css max-width:220px */
   background:var(--shell-chrome) !important; color:var(--shell-ink) !important;
   border:1px solid var(--shell-line) !important; border-radius:14px !important;
   box-shadow:var(--shell-shadow) !important;
 }
+
+/* Fallback callout: shown when nothing in the selected chains is nearby */
+#nearestInfo .nearest-alert{
+  display:flex; gap:8px; align-items:flex-start;
+  margin:0 0 10px; padding:9px 11px;
+  background:color-mix(in srgb, var(--accent) 15%, transparent);
+  border-left:3px solid var(--accent);
+  border-radius:8px;
+  font-size:12.5px; font-weight:700; line-height:1.35; color:var(--shell-ink);
+}
+#nearestInfo .nearest-alert::before{ content:"ℹ️"; flex:none; }
 
 /* ---------- "Missing a location?" : slim pill, top-left ---------- */
 #missingBtn{
