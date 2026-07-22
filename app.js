@@ -26,7 +26,10 @@ const CHAIN_REGISTRY = {
   quiktrip: { name: "QuikTrip", color: '#e8590c', textColor: '#ffffff', dataVar: 'quiktripLocations' },
   loves: { name: "Love's", color: '#8e44ad', textColor: '#ffffff', dataVar: 'lovesLocations' },
   bucees: { name: "Buc-ee's", color: '#ffd200', textColor: '#1c1c1e', dataVar: 'buceesLocations' },
-  caseys: { name: "Casey's", color: '#d81b60', textColor: '#ffffff', dataVar: 'caseysLocations' }
+  caseys: { name: "Casey's", color: '#d81b60', textColor: '#ffffff', dataVar: 'caseysLocations' },
+  kwiktrip: { name: "Kwik Trip", color: '#3f51b5', textColor: '#ffffff', dataVar: 'kwiktripLocations' },
+  royalFarms: { name: "Royal Farms", color: '#33691e', textColor: '#ffffff', dataVar: 'royalFarmsLocations' },
+  rutters: { name: "Rutter's", color: '#4e342e', textColor: '#ffffff', dataVar: 'ruttersLocations' }
 };
 const DEFAULT_CHAIN_KEY = 'stewarts';
 
