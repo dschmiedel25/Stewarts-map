@@ -2678,8 +2678,31 @@ function bathroomNowCard(result,fallback=false){
   const chainBadge=chain.name?`<div class="now-chain-badge" style="background:${chain.color};color:${chain.textColor};">${escapeHtml(chain.name)}</div>`:'';
   return `<div class="bathroom-now-card"><button class="bathroom-now-close" id="bathroom-now-close" title="Close">✕</button><div class="now-title">🚽 ${fallback?'Closest location':'Closest bathroom by driving distance'}</div>${chainNote}${chainBadge}<b>${result.loc.n}</b><br>${distance}${duration}<br>${open===true?'🟢 Open now':open===false?'🔴 Closed now':'⚪ Hours unavailable'}<br>🚻 ${avgStr(agg.bathroomSum,agg.bathroomCount)}★ · ${agg.bathroomCount} rating${agg.bathroomCount===1?'':'s'}${lastRatedNote}${hoursMissingNote}<div class="now-actions"><button class="btn btn-primary" id="bathroom-now-directions">🧭 Get Directions</button><button class="btn btn-secondary" id="bathroom-now-view">Details</button></div></div>`;
 }
-let userMarker=null;
-const whereAmIBtn=document.getElementById('whereAmIBtn');
+// For Bathroom Now: drop any of the top-4 nearest candidates that are in the HARD out-of-order
+// phase, in a SINGLE batched query (Firestore `in` takes up to 10 ids, so 4 = one read cost).
+// Candidates past the top 4 are left untouched. Fails open — on any error, returns the list as-is.
+async function filterOutHardOoo(candidates){
+  try{
+    const topN = candidates.slice(0, 4);
+    const ids = topN.map(l => l.id);
+    if(!ids.length) return candidates;
+    const {db, collection, query, where, getDocs} = await fb();
+    const snap = await getDocs(query(collection(db, 'outOfOrder'), where('locId', 'in', ids)));
+    const byLoc = {};
+    snap.forEach(d => { const r = d.data(); (byLoc[r.locId] = byLoc[r.locId] || []).push(r); });
+    const hardSet = new Set();
+    for(const id of ids){
+      const rows = byLoc[id] || [];
+      let clearedAfter = 0; const reports = [];
+      rows.forEach(r => { if(r.cleared){ if(r.ts > clearedAfter) clearedAfter = r.ts; } else reports.push(r.ts); });
+      const live = reports.filter(t => t > clearedAfter);
+      if(oooStatus(live).phase === 'hard') hardSet.add(id);
+    }
+    if(!hardSet.size) return candidates;
+    const kept = candidates.filter(l => !hardSet.has(l.id));
+    return kept.length ? kept : candidates;   // never dead-end
+  }catch(e){ console.error('filterOutHardOoo failed', e); return candidates; }
+}
 const locateBtn=document.getElementById('locateBtn'),nearestInfo=document.getElementById('nearestInfo');
 
 function setUserLocationMarker(lat, lng){
@@ -2759,7 +2782,18 @@ locateBtn.addEventListener('click',()=>{
     if(nearestSelectedMiles > CHAIN_FALLBACK_MILES){
       eligible = seedLocations.filter(loc => isLocationOpenNow(loc) !== false);
     }
-    const candidates=eligible.map(loc=>({loc,d:milesBetween(user.lat,user.lng,loc.lat,loc.lng)})).sort((a,b)=>a.d-b.d).slice(0,10).map(x=>x.loc);
+    let candidates=eligible.map(loc=>({loc,d:milesBetween(user.lat,user.lng,loc.lat,loc.lng)})).sort((a,b)=>a.d-b.d).slice(0,10).map(x=>x.loc);
+    if(!candidates.length){
+      locateBtn.disabled=false;locateBtn.textContent='🚽 Bathroom Now';
+      nearestInfo.style.display='block';
+      nearestInfo.textContent='No open bathrooms found nearby right now.';
+      return;
+    }
+    // Don't route someone to a bathroom that's actively flagged out of order. Check the 4 closest
+    // in a single batched query and drop any in the HARD phase (soft-phase ones are fine — "might
+    // be working now"). Falls through to the next closest survivor. If the check fails or all 4 are
+    // flagged (extremely unlikely), we keep the original list rather than dead-end.
+    candidates = await filterOutHardOoo(candidates);
     if(!candidates.length){
       locateBtn.disabled=false;locateBtn.textContent='🚽 Bathroom Now';
       nearestInfo.style.display='block';
