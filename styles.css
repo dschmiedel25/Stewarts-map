@@ -425,6 +425,19 @@
   .achievement-date{font-size:11.5px;color:var(--amber);margin-top:3px;font-weight:600;}
   .achievement-progress{font-size:11.5px;color:var(--muted);margin-top:3px;}
 
+  /* Hidden trophies — masked "mystery" cards until unlocked (❓ in a dashed ring). */
+  .achievement-card.hidden-trophy .achievement-icon{
+    opacity:1; filter:none; font-size:16px; color:var(--muted);
+    width:32px; height:32px; line-height:30px; box-sizing:border-box;
+    border:1px dashed var(--muted); border-radius:50%;
+  }
+  .achievement-card.hidden-trophy .achievement-name{
+    color:var(--muted); font-style:italic; font-weight:700;
+  }
+  .achievement-card.hidden-trophy .achievement-desc{
+    color:var(--muted); opacity:.75; font-style:italic;
+  }
+
   /* Achievement unlock toast */
   .achievement-toast{
     position:fixed;left:50%;top:16px;transform:translate(-50%,-140%);
