@@ -595,6 +595,7 @@ function storeFeatureEditorHtml(locId, myVote){
 // True if a location has any OSM-VERIFIED store feature to show (community confirmations now
 // live in the unified block, so they no longer count toward showing this OSM section).
 function storeSectionHasContent(loc){
+  if(loc && loc.osm && loc.osm.gas) return true;   // gas alone is enough to show the section
   return osmVerifiedBadges(loc, STORE_FEATURES, storeFeatureCache[loc.id]) !== '';
 }
 // Same, for the OSM bathroom-features section (excluding accessible, which has its own badge).
@@ -604,7 +605,10 @@ function osmBathroomHasContent(loc){
 
 function storeFeatureSummaryHtml(summary, loc){
   // OSM-verified store badges only — community confirmations live in the unified block above.
-  const verified = osmVerifiedBadges(loc, STORE_FEATURES, summary);
+  // Gas is display-only (OSM-known, never voted on): show it as a quiet teal badge up front.
+  const gasBadge = (loc && loc.osm && loc.osm.gas)
+    ? '<span class="feature-badge verified">⛽ Gas</span>' : '';
+  const verified = gasBadge + osmVerifiedBadges(loc, STORE_FEATURES, summary);
   if(!summary && !verified) return '<span class="feature-badge unconfirmed">Loading features…</span>';
   if(!verified) return '<span class="feature-badge unconfirmed">Nothing verified yet</span>';
   return verified;
@@ -948,12 +952,9 @@ function popupHtml(loc, agg, myVote){
   const recency = relativeTimeFromNow(agg.lastRatedAt || agg.lastUpdated);
   const recencyLine = recency ? `<div class="hours-line">📝 Last rated ${recency}</div>` : '';
   const chain = chainFor(loc);
-  const gasIcon = (loc.osm && loc.osm.gas) ? '<span class="gas-indicator" title="Gas &amp; diesel available">⛽</span>' : '';
   return `<div class="popup-inner" data-locid="${loc.id}">
     <div class="popup-head-row">
       <div class="chain-badge" style="background:${chain.color};color:${chain.textColor};">${chain.name}</div>
-      ${gasIcon}
-      <span id="access-indicator-${loc.id}">${accessIndicatorHtml(loc.id)}</span>
     </div>
     <div class="addr addr-title">${loc.addr}${loc.num ? ' &middot; Shop #' + loc.num : ''}</div>
     ${hoursLine}
@@ -1237,8 +1238,6 @@ async function attachAmenityHandlers(loc){
   if(osmB) osmB.classList.toggle('is-empty', !osmBathroomHasContent(loc));
   const badgeEl = document.getElementById('accessible-badge-' + loc.id);
   if(badgeEl) badgeEl.innerHTML = accessibleBadgeHtml(loc.id);
-  const accEl = document.getElementById('access-indicator-' + loc.id);
-  if(accEl) accEl.innerHTML = accessIndicatorHtml(loc.id);
 
   // Make sure THIS person's saved answers are loaded before we compute the visit's question list,
   // so we never re-ask something they've already answered (e.g. right after a page refresh, before
