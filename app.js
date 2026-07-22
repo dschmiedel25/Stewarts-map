@@ -103,11 +103,24 @@ document.getElementById('themeToggle').addEventListener('click', () => {
 const map = L.map('map', { zoomControl: false, maxZoom: 19 }).setView([42.65123, -73.75176], 12);
 L.control.zoom({ position: 'bottomright' }).addTo(map);
 
-// Plain marker layer group — no clustering. We tried Leaflet.markercluster for a while, but
-// it turned out to be the common thread behind several distinct Android bugs (a maxZoom
-// error, a zoomToShowLayer race condition, and possibly the popup-closes-immediately issue),
-// so it's been removed entirely in favor of reliability. All markers just render directly.
-const markerCluster = L.layerGroup();
+// Marker clustering (re-added, Option A: clustering owns all markers; the old viewport
+// add/remove culling was removed so the two systems can't fight — that conflict was the likely
+// cause of the earlier Android races). Guardrails against the bugs seen last time:
+//  - maxZoom set explicitly to match the map/tile maxZoom (fixes the old "maxZoom error")
+//  - disableClusteringAtZoom: at close zoom pins render individually, skipping the spiderfy /
+//    zoomToShowLayer code paths that caused races
+//  - spiderfy disabled and animations off for stability on older devices
+const markerCluster = L.markerClusterGroup({
+  maxClusterRadius: 55,
+  disableClusteringAtZoom: 16,
+  spiderfyOnMaxZoom: false,
+  showCoverageOnHover: false,
+  zoomToBoundsOnClick: true,
+  animate: true,              // clusters expand/collapse with a modern animation
+  animateAddingMarkers: false, // ...but don't animate bulk marker adds (that part is heavy)
+  removeOutsideVisibleBounds: true,   // the plugin does its own viewport culling internally
+  maxZoom: 19
+});
 map.addLayer(markerCluster);
 
 function positionSelectedMarker(marker, animate = false){
@@ -157,13 +170,18 @@ function zoomToMarker(marker){
   // reasserts itself next time applyFilters() runs (e.g. any checkbox change).
   if(!markerCluster.hasLayer(marker)) markerCluster.addLayer(marker);
 
-  // Open the popup BEFORE moving the map. setView fires 'moveend' synchronously, which runs
-  // applyFilters(); for an off-chain pin that check would remove the marker (chain not selected)
-  // unless its popup is already open — the popupOpen guard only protects an ALREADY-open popup.
-  // Opening first means the guard is in effect before the move, so the pin survives and shows.
-  marker.openPopup();
+  // With clustering, a marker may be inside a cluster bubble at the current zoom — opening its
+  // popup then would show nothing (the old "popup closes immediately" symptom). disableClustering-
+  // AtZoom is 16, so we zoom to 16 FIRST (which declusters this marker), then open the popup once
+  // it's individually on the map. Using the map's own 'moveend' (one-shot) avoids the plugin's
+  // zoomToShowLayer race that caused trouble before.
+  const openWhenReady = () => {
+    marker.openPopup();
+    positionSelectedMarker(marker, false);
+  };
   map.setView(marker.getLatLng(), 16, { animate: false });
-  positionSelectedMarker(marker, false);
+  // setView fires moveend synchronously here; open on the next tick so the cluster has settled.
+  setTimeout(openWhenReady, 0);
 }
 
 // Register the service worker — required by Android/Chrome for "Add to Home Screen" to
@@ -2327,36 +2345,17 @@ function applyFilters(){
   // with thousands of locations loaded. A pin whose popup is currently open is always kept
   // (e.g. a Bathroom Now / list result centered on a pin that a filter would otherwise hide)
   // so opening it never immediately closes it on the resulting map move.
-  const bounds = map.getBounds().pad(MARKER_VIEWPORT_PAD);
-
-  // Zoom-based thinning: when zoomed out, thousands of pins pile into an unreadable smear and
-  // strain older devices. Individual pins aren't tappable at that scale anyway, so below a zoom
-  // threshold we render only a deterministic 1-in-N sample (keyed off each pin's own coords, so
-  // the SAME pins show across pans — no flicker). As you zoom in, N drops to 1 and every in-view
-  // pin appears. A pin with an open popup is always exempt.
-  const z = map.getZoom();
-  let sampleN = 1;
-  if(z <= 5)      sampleN = 12;   // country view — heavy thinning
-  else if(z <= 6) sampleN = 7;
-  else if(z <= 7) sampleN = 4;
-  else if(z <= 8) sampleN = 2;    // regional — light thinning
-  const keepBySample = (m) => {
-    if(sampleN <= 1) return true;
-    const p = m.getLatLng();
-    // stable integer hash from coords → consistent membership regardless of pan
-    const h = Math.abs(Math.round((p.lat * 73856093) ^ (p.lng * 19349663)));
-    return (h % sampleN) === 0;
-  };
-
+  // Clustering owns viewport culling now (removeOutsideVisibleBounds), so applyFilters only
+  // decides membership by the chain / open-now / accessible filters — no bounds check here. A pin
+  // with an open popup is always kept so opening it never immediately removes it.
   allLocationMarkers.forEach(m => {
     const loc = m.locationData;
     if(!loc) return;
     const openOk = showAllLocations || isLocationOpenNow(loc) !== false; // hide only confirmed-closed; unknown stays visible
     const accessOk = !hideInaccessible || !isConfirmedNotAccessible(loc); // hide only confirmed-inaccessible; unknown stays visible
     const chainOk = activeChains.has(m.chainKey || DEFAULT_CHAIN_KEY);
-    const inView = bounds.contains(m.getLatLng());
     const popupOpen = m.isPopupOpen && m.isPopupOpen();
-    if((openOk && accessOk && chainOk && inView && keepBySample(m)) || popupOpen){
+    if((openOk && accessOk && chainOk) || popupOpen){
       if(!markerCluster.hasLayer(m)) markerCluster.addLayer(m);
     } else {
       if(markerCluster.hasLayer(m)) markerCluster.removeLayer(m);
@@ -2364,10 +2363,12 @@ function applyFilters(){
   });
 }
 
-// Re-evaluate which pins are on the map whenever the view settles after a pan or zoom.
-// 'moveend' fires after both, so it covers zooming too. This is what makes viewport-based
-// rendering work: as you move around, only the pins now in view get added to the DOM.
-map.on('moveend', applyFilters);
+// Clustering now handles which pins render as you pan/zoom (removeOutsideVisibleBounds), so
+// applyFilters no longer needs to run on every map move — it runs only when a FILTER changes
+// (chain checkboxes, open-now, accessible). This is a big win: no more iterating every marker on
+// each pan, and it removes the applyFilters-on-popup-open path that contributed to the earlier
+// "popup closes immediately" race.
+
 
 // Chain filter — lets people show/hide pins per chain when more than one is registered.
 // Selection persists across visits via localStorage, stored as a DENY-list (which chains
