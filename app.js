@@ -103,57 +103,16 @@ document.getElementById('themeToggle').addEventListener('click', () => {
   });
 })();
 
-const map = L.map('map', { zoomControl: false, maxZoom: 19 }).setView([42.65123, -73.75176], 12);
+const map = L.map('map', {
+  zoomControl: false,
+  maxZoom: 19,
+  // One-handed zoom (double-tap + drag up/down, Google Maps style) via the DoubleTapDragZoom
+  // plugin. The option is simply ignored if the plugin script failed to load, so the map still
+  // works normally without it.
+  doubleTapDragZoom: 'center',
+  doubleTapDragZoomOptions: { reverse: true }   // drag DOWN = zoom in (Google Maps direction)
+}).setView([42.65123, -73.75176], 12);
 L.control.zoom({ position: 'bottomright' }).addTo(map);
-
-// One-handed zoom: double-tap-and-DRAG (the Google/Apple Maps thumb gesture — tap twice, hold,
-// slide down to zoom in / up to zoom out). Leaflet has double-tap-to-zoom built in, but not the
-// drag variant, which is the one that makes one-handed use work. Implemented on touch events:
-// a second touchstart within 300ms & ~40px of the first arms the gesture; vertical movement then
-// zooms around the tap point instead of panning, until the finger lifts.
-(function enableOneHandZoom(){
-  const el = map.getContainer();
-  let lastTapTime = 0, lastTapPos = null;
-  let armed = false, startY = 0, startZoom = 0, anchor = null, moved = false;
-
-  el.addEventListener('touchstart', (e) => {
-    if(e.touches.length !== 1){ armed = false; return; }   // multi-finger = pinch, not ours
-    const t = e.touches[0];
-    const now = Date.now();
-    const pos = { x: t.clientX, y: t.clientY };
-    if(now - lastTapTime < 300 && lastTapPos &&
-       Math.abs(pos.x - lastTapPos.x) < 40 && Math.abs(pos.y - lastTapPos.y) < 40){
-      // Second tap in time & place — arm drag-zoom.
-      armed = true; moved = false;
-      startY = t.clientY;
-      startZoom = map.getZoom();
-      anchor = map.containerPointToLatLng([pos.x, pos.y]);
-      map.dragging.disable();          // vertical movement zooms instead of panning
-      map.doubleClickZoom.disable();   // suppress the built-in double-tap jump while dragging
-    }
-    lastTapTime = now; lastTapPos = pos;
-  }, { passive: true });
-
-  el.addEventListener('touchmove', (e) => {
-    if(!armed || e.touches.length !== 1) return;
-    const dy = e.touches[0].clientY - startY;
-    if(Math.abs(dy) > 6) moved = true;
-    // Drag DOWN = zoom in, UP = zoom out (matches Google Maps). ~150px per zoom level.
-    const targetZoom = Math.max(map.getMinZoom(), Math.min(map.getMaxZoom(), startZoom + dy / 150));
-    map.setZoomAround(anchor, targetZoom, { animate: false });
-  }, { passive: true });
-
-  const finish = () => {
-    if(!armed) return;
-    armed = false;
-    map.dragging.enable();
-    // If the finger never dragged, let the plain double-tap zoom-in behave as before.
-    if(!moved) map.setZoomAround(anchor, Math.min(map.getMaxZoom(), startZoom + 1));
-    setTimeout(() => map.doubleClickZoom.enable(), 50);
-  };
-  el.addEventListener('touchend', finish, { passive: true });
-  el.addEventListener('touchcancel', finish, { passive: true });
-})();
 
 // Marker clustering (re-added, Option A: clustering owns all markers; the old viewport
 // add/remove culling was removed so the two systems can't fight — that conflict was the likely
@@ -2634,10 +2593,21 @@ document.getElementById('listViewToggle').addEventListener('click',()=>{buildLis
 document.getElementById('listViewClose').addEventListener('click',()=>{document.getElementById('listViewPanel').classList.remove('show');document.body.classList.remove('list-open');suppressNextLocateClick=true;setTimeout(()=>{suppressNextLocateClick=false;},400);});
 
 // Account panel
-function updateAccountUI(){
+// Which view the shared panel is currently showing ('account' | 'passport'). Auth-state changes
+// re-run updateAccountUI with no argument; defaulting to this keeps the current view intact.
+let accountPanelMode = 'account';
+
+function updateAccountUI(passportMode){
+  if(passportMode === undefined) passportMode = (accountPanelMode === 'passport');
   const loggedIn = isLoggedIn();
-  document.getElementById('loggedOutView').style.display = loggedIn ? 'none' : 'block';
-  document.getElementById('loggedInView').style.display = loggedIn ? 'block' : 'none';
+  // In passport mode both auth sections stay hidden — the panel is showing the Passport view.
+  if(passportMode){
+    document.getElementById('loggedOutView').style.display = 'none';
+    document.getElementById('loggedInView').style.display = 'none';
+  } else {
+    document.getElementById('loggedOutView').style.display = loggedIn ? 'none' : 'block';
+    document.getElementById('loggedInView').style.display = loggedIn ? 'block' : 'none';
+  }
   const _cb = document.getElementById('communityBanner');
   if(_cb) _cb.style.display = loggedIn ? 'none' : '';   // banner is logged-out only
   document.body.classList.toggle('logged-in', loggedIn);   // gates signed-in-only UI (theme toggle, etc.)
@@ -2655,21 +2625,37 @@ function updateAccountUI(){
   if(syncNote) syncNote.style.display = loggedIn ? 'none' : 'block';
 }
 
-document.getElementById('passportToggle').addEventListener('click', () => {
-  document.getElementById('accountPanel').classList.add('show');
-  updateAccountUI();
+// The account panel doubles as the Passport panel — but as two distinct VIEWS, not one long
+// scroll. Opening via 👤 shows only the auth section; opening via 🎫 shows only the
+// Passport/achievements (with the sign-in nudge handled by passportSyncNote when logged out).
+function openAccountPanel(mode){
+  accountPanelMode = mode === 'passport' ? 'passport' : 'account';
+  const panel = document.getElementById('accountPanel');
+  panel.classList.add('show');
+  const isPassport = mode === 'passport';
+  const title = document.querySelector('#accountHeader span');
+  if(title) title.textContent = isPassport ? '🎫 Bathroom Passport' : '👤 Account';
+  const loggedOut = document.getElementById('loggedOutView');
+  const loggedIn = document.getElementById('loggedInView');
+  const passport = document.getElementById('passportSection');
+  if(passport) passport.style.display = isPassport ? '' : 'none';
+  // Auth sections: shown in account mode (updateAccountUI decides which of the two), hidden in
+  // passport mode. Inline '' lets updateAccountUI's own display logic take over in account mode.
+  if(loggedOut) loggedOut.style.display = isPassport ? 'none' : '';
+  if(loggedIn) loggedIn.style.display = isPassport ? 'none' : '';
+  updateAccountUI(isPassport);
   checkAndUnlockAchievements();
-  requestAnimationFrame(() => {
-    const passport = document.getElementById('passportSection');
-    if(passport) passport.scrollIntoView({ block: 'start' });
-  });
-});
+  if(isPassport){
+    requestAnimationFrame(() => {
+      const p = document.getElementById('passportSection');
+      if(p) p.scrollIntoView({ block: 'start' });
+    });
+  }
+}
 
-document.getElementById('accountToggle').addEventListener('click', () => {
-  document.getElementById('accountPanel').classList.add('show');
-  updateAccountUI();
-  checkAndUnlockAchievements();
-});
+document.getElementById('passportToggle').addEventListener('click', () => openAccountPanel('passport'));
+
+document.getElementById('accountToggle').addEventListener('click', () => openAccountPanel('account'));
 
 document.getElementById('accountClose').addEventListener('click', () => {
   document.getElementById('accountPanel').classList.remove('show');
@@ -2727,8 +2713,6 @@ document.getElementById('logOutBtn').addEventListener('click', async () => {
   document.getElementById('authUsername').value = '';
   document.getElementById('authPassword').value = '';
 });
-
-
 
 document.getElementById('listViewItems').addEventListener('click', (e) => {
   const item = e.target.closest('.list-item');
