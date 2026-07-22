@@ -499,7 +499,8 @@
     resBody.innerHTML='';
     records.forEach((rec,i)=>{ rec.status='pending'; rec.out={}; rec.rowEl=makeRow(rec,i); });
 
-    const fields=['displayName','formattedAddress','addressComponents','location','regularOpeningHours','businessStatus'];
+    const fields=['displayName','formattedAddress','addressComponents','location','businessStatus'];
+    if(opt.hours.checked){ fields.push('regularOpeningHours'); }   // hours field bumps the Places SKU — only request it when wanted
     if(opt.phone.checked){ fields.push('nationalPhoneNumber','websiteURI'); }
 
     let done=0;
