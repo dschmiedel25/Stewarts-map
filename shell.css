@@ -450,3 +450,19 @@ body:not(.logged-in) #appDrawer #navAppPref{ display:none !important; }
 .store-section-head{ font-size:13px; font-weight:800; opacity:.65; margin-bottom:6px; }
 /* When the store summary has nothing confirmed/verified, hide the whole section (JS adds .is-empty). */
 .store-section.is-empty{ display:none; }
+
+/* ---------- Community-confirmed feature badge (⭐, warm color) ----------
+   Visitor-confirmed features are the gold standard: a warm amber badge with a trailing star,
+   distinct from the quieter teal OSM-"verified" badge (which has no star). */
+.feature-badge.community{
+  background:color-mix(in srgb, #f59e0b 20%, transparent) !important;
+  border:1px solid color-mix(in srgb, #f59e0b 60%, transparent) !important;
+  color:var(--popup-text) !important;
+  font-weight:700;
+}
+
+/* ---------- Unified "Confirmed by visitors" block (bathroom + store together, up top) ---------- */
+.community-section{ margin:10px 0; }
+.community-section.is-empty{ display:none; }
+.community-section .feature-title{ margin-bottom:6px; }
+.osm-bathroom-section.is-empty{ display:none; }

@@ -464,19 +464,44 @@ function osmVerifiedBadges(loc, featureDefs, communitySummary, skip){
   }).map(a => `<span class="feature-badge verified">${amenityAnswerIcon(a, 'yes')} ${a.label}</span>`).join('');
 }
 
-function amenitySummaryHtml(summary, loc){
+// Community-confirmed badges for a given feature list (amber ⭐). Excludes any keys in `skip`.
+// Refresh the unified "Confirmed by visitors" block and collapse it when empty. Call after any
+// vote save or summary load, since a new confirmation may have just crossed the threshold.
+function refreshCommunityBlock(loc){
+  const el = document.getElementById('community-summary-' + loc.id);
+  if(!el) return;
+  el.innerHTML = communitySummaryHtml(loc);
+  const section = document.getElementById('community-section-' + loc.id);
+  if(section) section.classList.toggle('is-empty', !communitySectionHasContent(loc));
+}
+
+function communityConfirmedBadges(loc, featureDefs, summary, skip){
   const conf = (loc && loc.conf) || {};
-  const confirmed = BATHROOM_AMENITIES.filter(a => {
+  return featureDefs.filter(a => {
+    if(skip && skip.includes(a.key)) return false;
     const x = summary && summary[a.key] || {yes:0,no:0};
-    return isConfirmedYes(x) || conf[a.key];   // live votes OR baked community confirmation
-  });
-  // 'accessible' is shown by its own prominent badge, so exclude it here to avoid duplication.
+    return isConfirmedYes(x) || conf[a.key];
+  }).map(a => `<span class="feature-badge community">${amenityAnswerIcon(a, 'yes')} ${a.label} ⭐</span>`).join('');
+}
+
+// The unified "✅ Confirmed by visitors" block: bathroom + store community confirmations together
+// in one flat row (icons distinguish them; no internal split). Empty → returns '' so the whole
+// block collapses. 'accessible' is excluded because it has its own prominent badge.
+function communitySummaryHtml(loc){
+  const bSummary = amenityCache[loc.id];
+  const sSummary = storeFeatureCache[loc.id];
+  return communityConfirmedBadges(loc, BATHROOM_AMENITIES, bSummary, ['accessible'])
+       + communityConfirmedBadges(loc, STORE_FEATURES, sSummary);
+}
+function communitySectionHasContent(loc){ return communitySummaryHtml(loc) !== ''; }
+
+function amenitySummaryHtml(summary, loc){
+  // OSM-verified bathroom badges only — community confirmations now live in the unified
+  // "Confirmed by visitors" block above. 'accessible' has its own prominent badge.
   const verified = osmVerifiedBadges(loc, BATHROOM_AMENITIES, summary, ['accessible']);
-  const communityBadges = confirmed.map(a => `<span class="feature-badge community">${amenityAnswerIcon(a, 'yes')} ${a.label} ⭐</span>`).join('');
-  const all = communityBadges + verified;
   if(!summary && !verified) return '<span class="feature-badge unconfirmed">Loading features…</span>';
-  if(!all) return '<span class="feature-badge unconfirmed">No features confirmed yet</span>';
-  return all;
+  if(!verified) return '<span class="feature-badge unconfirmed">Nothing verified yet</span>';
+  return verified;
 }
 
 // Same "confirmed" rule as the summary badges (at least 2 yes-votes, and more yes than no),
@@ -567,30 +592,22 @@ function storeFeatureEditorHtml(locId, myVote){
   </div>`;
 }
 
-// True if a location has any store feature worth showing at render time (community-confirmed,
-// baked-confirmed, or OSM-verified) — used to pre-collapse the empty store section without a flash.
+// True if a location has any OSM-VERIFIED store feature to show (community confirmations now
+// live in the unified block, so they no longer count toward showing this OSM section).
 function storeSectionHasContent(loc){
-  const conf = (loc && loc.conf) || {};
-  const osm = (loc && loc.osm) || {};
-  const cache = storeFeatureCache[loc.id];
-  return STORE_FEATURES.some(a => {
-    if(conf[a.key] || osm[a.key]) return true;
-    const x = cache && cache[a.key];
-    return isConfirmedYes(x);
-  });
+  return osmVerifiedBadges(loc, STORE_FEATURES, storeFeatureCache[loc.id]) !== '';
+}
+// Same, for the OSM bathroom-features section (excluding accessible, which has its own badge).
+function osmBathroomHasContent(loc){
+  return osmVerifiedBadges(loc, BATHROOM_AMENITIES, amenityCache[loc.id], ['accessible']) !== '';
 }
 
 function storeFeatureSummaryHtml(summary, loc){
-  const conf = (loc && loc.conf) || {};
-  const confirmed = STORE_FEATURES.filter(a => {
-    const x = summary && summary[a.key] || {yes:0,no:0};
-    return isConfirmedYes(x) || conf[a.key];
-  });
+  // OSM-verified store badges only — community confirmations live in the unified block above.
   const verified = osmVerifiedBadges(loc, STORE_FEATURES, summary);
-  const all = confirmed.map(a => `<span class="feature-badge community">${amenityAnswerIcon(a, 'yes')} ${a.label} ⭐</span>`).join('') + verified;
   if(!summary && !verified) return '<span class="feature-badge unconfirmed">Loading features…</span>';
-  if(!all) return '<span class="feature-badge unconfirmed">No features confirmed yet</span>';
-  return all;
+  if(!verified) return '<span class="feature-badge unconfirmed">Nothing verified yet</span>';
+  return verified;
 }
 
 async function loadStoreFeatureSummary(locId){
@@ -964,7 +981,10 @@ function popupHtml(loc, agg, myVote){
       </div>
       <div class="save-note" id="note-bathroom-${loc.id}"></div>
     </div>
-    <div class="feature-summary"><div class="feature-title">🚻 Bathroom features</div><div class="feature-badges" id="feature-summary-${loc.id}">${amenitySummaryHtml(amenityCache[loc.id], loc)}</div></div>
+    <div class="community-section${communitySectionHasContent(loc) ? '' : ' is-empty'}" id="community-section-${loc.id}">
+      <div class="feature-title">✅ Confirmed by visitors</div>
+      <div class="feature-badges" id="community-summary-${loc.id}">${communitySummaryHtml(loc)}</div>
+    </div>
     <div class="tips-section">
       <span class="rating-label">💬 Tips from visitors</span>
       <ul class="tips-list" id="tips-list-${loc.id}"><li style="color:#999;">Loading…</li></ul>
@@ -974,6 +994,7 @@ function popupHtml(loc, agg, myVote){
       </div>
     </div>
     ${amenityEditorHtml(loc.id, myVote)}
+    <div class="feature-summary osm-bathroom-section${osmBathroomHasContent(loc) ? '' : ' is-empty'}"><div class="feature-title">🚻 Bathroom features</div><div class="feature-badges" id="feature-summary-${loc.id}">${amenitySummaryHtml(amenityCache[loc.id], loc)}</div></div>
     <div class="store-section${storeSectionHasContent(loc) ? '' : ' is-empty'}">
       <div class="store-section-head">🏪 Store amenities</div>
       <div class="feature-summary"><div class="feature-badges" id="store-feature-summary-${loc.id}">${storeFeatureSummaryHtml(storeFeatureCache[loc.id], loc)}</div></div>
@@ -1211,10 +1232,26 @@ async function attachAmenityHandlers(loc){
   const summaryEl=document.getElementById('feature-summary-'+loc.id);
   const summary=await loadAmenitySummary(loc.id);
   if(summaryEl) summaryEl.innerHTML=amenitySummaryHtml(summary, loc);
+  refreshCommunityBlock(loc);
+  const osmB = document.querySelector(`.popup-inner[data-locid="${loc.id}"] .osm-bathroom-section`);
+  if(osmB) osmB.classList.toggle('is-empty', !osmBathroomHasContent(loc));
   const badgeEl = document.getElementById('accessible-badge-' + loc.id);
   if(badgeEl) badgeEl.innerHTML = accessibleBadgeHtml(loc.id);
   const accEl = document.getElementById('access-indicator-' + loc.id);
   if(accEl) accEl.innerHTML = accessIndicatorHtml(loc.id);
+
+  // Make sure THIS person's saved answers are loaded before we compute the visit's question list,
+  // so we never re-ask something they've already answered (e.g. right after a page refresh, before
+  // the bulk vote load has landed). Recompute the visit list against the fresh vote.
+  try{
+    const saved = await loadMyVote(loc.id);
+    if(saved){
+      myVoteCache[loc.id] = { ...emptyVote(), ...saved };
+      delete visitQuestions[loc.id]; delete visitCursor[loc.id];   // force a fresh, correct pick
+      const stepReset = document.getElementById('amenity-step-' + loc.id);
+      if(stepReset) stepReset.innerHTML = renderAmenityStepHtml(myVoteCache[loc.id], loc.id);
+    }
+  }catch(e){ /* non-fatal — fall back to whatever's cached */ }
 
   const stepOrig = document.getElementById('amenity-step-' + loc.id);
   if(!stepOrig) return;
@@ -1281,6 +1318,7 @@ async function attachAmenityHandlers(loc){
         if(section) section.classList.toggle('is-empty', !storeEl.querySelector('.feature-badge:not(.unconfirmed)'));
       }
     }
+    refreshCommunityBlock(loc);   // a just-cast vote may have crossed the confirm threshold
   });
 }
 
@@ -1289,6 +1327,7 @@ async function attachStoreFeatureHandlers(loc){
   const summary=await loadStoreFeatureSummary(loc.id);
   if(summaryEl){
     summaryEl.innerHTML=storeFeatureSummaryHtml(summary, loc);
+    refreshCommunityBlock(loc);
     // Collapse the whole "🏪 Store" section when nothing is confirmed or verified, so an empty
     // section never shows a lonely header.
     const section = summaryEl.closest('.store-section');
