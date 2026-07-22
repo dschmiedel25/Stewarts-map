@@ -480,3 +480,15 @@ body:not(.logged-in) #appDrawer #navAppPref{ display:none !important; }
 .ooo-hard-sub{ font-size:12px; color:var(--popup-muted, #888); margin:4px 0 10px; }
 .ooo-working-btn{ width:100%; }
 .ooo-hard .ooo-report-link{ display:block; margin:8px auto 0; }
+
+/* ---------- Structured report categories ---------- */
+.report-heading{ font-size:13px; font-weight:800; margin-bottom:8px; }
+.report-cats{ display:flex; flex-direction:column; gap:6px; }
+.report-cat-btn{
+  text-align:left; background:var(--shell-chrome, #f4f4f5); border:1px solid var(--shell-line, #ddd);
+  border-radius:10px; padding:9px 12px; font-size:13px; font-weight:600;
+  color:var(--shell-ink, #222); cursor:pointer;
+}
+.report-cat-btn:hover{ border-color:#c62828; }
+.report-other-row{ display:flex; gap:6px; margin-top:8px; }
+.report-other-row .tip-input{ flex:1; }

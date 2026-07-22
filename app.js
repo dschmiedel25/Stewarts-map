@@ -1016,9 +1016,17 @@ function popupHtml(loc, agg, myVote){
       <button class="btn btn-danger btn-icon-only report-toggle-btn" title="Report an issue" id="report-toggle-${loc.id}">🚩</button>
     </div>
     <div class="report-section" id="report-section-${loc.id}" style="display:none;">
-      <div class="tip-input-row">
-        <input type="text" class="tip-input" id="report-input-${loc.id}" maxlength="80" placeholder="What's wrong? e.g. closed, wrong address" />
-        <button class="btn btn-amber tip-submit" id="report-submit-${loc.id}">Send report</button>
+      <div class="report-heading">Report a problem with this listing</div>
+      <div class="report-cats" id="report-cats-${loc.id}">
+        <button type="button" class="report-cat-btn" data-reason="Permanently closed">🚫 Permanently closed</button>
+        <button type="button" class="report-cat-btn" data-reason="Wrong address / location">📍 Wrong address</button>
+        <button type="button" class="report-cat-btn" data-reason="Wrong hours">🕐 Wrong hours</button>
+        <button type="button" class="report-cat-btn" data-reason="Not a real location">❓ Not a real location</button>
+        <button type="button" class="report-cat-btn" data-reason="__other__">✏️ Other</button>
+      </div>
+      <div class="report-other-row" id="report-other-row-${loc.id}" style="display:none;">
+        <input type="text" class="tip-input" id="report-input-${loc.id}" maxlength="80" placeholder="Briefly describe the problem" />
+        <button class="btn btn-amber tip-submit" id="report-submit-${loc.id}">Send</button>
       </div>
       <div class="save-note" id="report-note-${loc.id}"></div>
     </div>
@@ -1233,10 +1241,12 @@ function attachStoreToggleHandler(loc){
 function attachReportHandler(loc){
   const toggleBtn = document.getElementById('report-toggle-' + loc.id);
   const section = document.getElementById('report-section-' + loc.id);
+  const cats = document.getElementById('report-cats-' + loc.id);
+  const otherRow = document.getElementById('report-other-row-' + loc.id);
   const input = document.getElementById('report-input-' + loc.id);
   const submitBtn = document.getElementById('report-submit-' + loc.id);
   const note = document.getElementById('report-note-' + loc.id);
-  if(!toggleBtn || !section || !input || !submitBtn) return;
+  if(!toggleBtn || !section || !cats) return;
 
   // Clone to avoid stacking duplicate listeners on reopen
   const newToggle = toggleBtn.cloneNode(true);
@@ -1245,29 +1255,42 @@ function attachReportHandler(loc){
     section.style.display = section.style.display === 'none' ? 'block' : 'none';
   });
 
-  const newSubmit = submitBtn.cloneNode(true);
-  submitBtn.parentNode.replaceChild(newSubmit, submitBtn);
-  newSubmit.addEventListener('click', async () => {
-    const reason = input.value.trim().slice(0, 80);
-    if(!reason){
-      if(note){ note.style.color = '#c62828'; note.textContent = 'Type what\'s wrong first.'; }
+  const send = async (reason) => {
+    if(note){ note.style.color=''; note.textContent = 'Sending…'; }
+    const sent = await logReport(loc, reason);
+    if(note){
+      note.style.color = sent ? '#2f6b3c' : '#c62828';
+      note.textContent = sent ? 'Report sent — thank you!' : "Couldn't send — check your connection and try again.";
+    }
+    if(sent){ newCats.style.display='none'; if(otherRow) otherRow.style.display='none'; }
+  };
+
+  // Category buttons: a tap sends immediately, except "Other" which reveals the free-text row.
+  const newCats = cats.cloneNode(true);
+  cats.parentNode.replaceChild(newCats, cats);
+  newCats.addEventListener('click', (e) => {
+    const btn = e.target.closest('.report-cat-btn');
+    if(!btn) return;
+    const reason = btn.dataset.reason;
+    if(reason === '__other__'){
+      if(otherRow){ otherRow.style.display = 'flex'; if(input) input.focus(); }
       return;
     }
-    newSubmit.disabled = true;
-    newSubmit.textContent = 'Sending...';
-
-    const sent = await logReport(loc, reason);
-
-    if(sent){
-      if(note){ note.style.color = '#2f6b3c'; note.textContent = 'Report sent — thank you!'; }
-      input.value = '';
-    } else {
-      // Don't claim success on a failed write — the reporter would think it went through.
-      if(note){ note.style.color = '#c62828'; note.textContent = "Couldn't send — check your connection and try again."; }
-    }
-    newSubmit.disabled = false;
-    newSubmit.textContent = 'Send report';
+    send(reason);
   });
+
+  if(submitBtn){
+    const newSubmit = submitBtn.cloneNode(true);
+    submitBtn.parentNode.replaceChild(newSubmit, submitBtn);
+    newSubmit.addEventListener('click', async () => {
+      const reason = ((input && input.value) || '').trim().slice(0, 80);
+      if(!reason){ if(note){ note.style.color = '#c62828'; note.textContent = 'Briefly describe the problem first.'; } return; }
+      newSubmit.disabled = true; newSubmit.textContent = 'Sending…';
+      await send(reason);
+      if(input) input.value = '';
+      newSubmit.disabled = false; newSubmit.textContent = 'Send';
+    });
+  }
 }
 
 // Out-of-order: reads status on open and re-renders the rating section, then wires the report /
@@ -2703,6 +2726,8 @@ async function filterOutHardOoo(candidates){
     return kept.length ? kept : candidates;   // never dead-end
   }catch(e){ console.error('filterOutHardOoo failed', e); return candidates; }
 }
+let userMarker=null;
+const whereAmIBtn=document.getElementById('whereAmIBtn');
 const locateBtn=document.getElementById('locateBtn'),nearestInfo=document.getElementById('nearestInfo');
 
 function setUserLocationMarker(lat, lng){
