@@ -106,6 +106,55 @@ document.getElementById('themeToggle').addEventListener('click', () => {
 const map = L.map('map', { zoomControl: false, maxZoom: 19 }).setView([42.65123, -73.75176], 12);
 L.control.zoom({ position: 'bottomright' }).addTo(map);
 
+// One-handed zoom: double-tap-and-DRAG (the Google/Apple Maps thumb gesture — tap twice, hold,
+// slide down to zoom in / up to zoom out). Leaflet has double-tap-to-zoom built in, but not the
+// drag variant, which is the one that makes one-handed use work. Implemented on touch events:
+// a second touchstart within 300ms & ~40px of the first arms the gesture; vertical movement then
+// zooms around the tap point instead of panning, until the finger lifts.
+(function enableOneHandZoom(){
+  const el = map.getContainer();
+  let lastTapTime = 0, lastTapPos = null;
+  let armed = false, startY = 0, startZoom = 0, anchor = null, moved = false;
+
+  el.addEventListener('touchstart', (e) => {
+    if(e.touches.length !== 1){ armed = false; return; }   // multi-finger = pinch, not ours
+    const t = e.touches[0];
+    const now = Date.now();
+    const pos = { x: t.clientX, y: t.clientY };
+    if(now - lastTapTime < 300 && lastTapPos &&
+       Math.abs(pos.x - lastTapPos.x) < 40 && Math.abs(pos.y - lastTapPos.y) < 40){
+      // Second tap in time & place — arm drag-zoom.
+      armed = true; moved = false;
+      startY = t.clientY;
+      startZoom = map.getZoom();
+      anchor = map.containerPointToLatLng([pos.x, pos.y]);
+      map.dragging.disable();          // vertical movement zooms instead of panning
+      map.doubleClickZoom.disable();   // suppress the built-in double-tap jump while dragging
+    }
+    lastTapTime = now; lastTapPos = pos;
+  }, { passive: true });
+
+  el.addEventListener('touchmove', (e) => {
+    if(!armed || e.touches.length !== 1) return;
+    const dy = e.touches[0].clientY - startY;
+    if(Math.abs(dy) > 6) moved = true;
+    // Drag DOWN = zoom in, UP = zoom out (matches Google Maps). ~150px per zoom level.
+    const targetZoom = Math.max(map.getMinZoom(), Math.min(map.getMaxZoom(), startZoom + dy / 150));
+    map.setZoomAround(anchor, targetZoom, { animate: false });
+  }, { passive: true });
+
+  const finish = () => {
+    if(!armed) return;
+    armed = false;
+    map.dragging.enable();
+    // If the finger never dragged, let the plain double-tap zoom-in behave as before.
+    if(!moved) map.setZoomAround(anchor, Math.min(map.getMaxZoom(), startZoom + 1));
+    setTimeout(() => map.doubleClickZoom.enable(), 50);
+  };
+  el.addEventListener('touchend', finish, { passive: true });
+  el.addEventListener('touchcancel', finish, { passive: true });
+})();
+
 // Marker clustering (re-added, Option A: clustering owns all markers; the old viewport
 // add/remove culling was removed so the two systems can't fight — that conflict was the likely
 // cause of the earlier Android races). Guardrails against the bugs seen last time:
