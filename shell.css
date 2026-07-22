@@ -466,3 +466,17 @@ body:not(.logged-in) #appDrawer #navAppPref{ display:none !important; }
 .community-section.is-empty{ display:none; }
 .community-section .feature-title{ margin-bottom:6px; }
 .osm-bathroom-section.is-empty{ display:none; }
+
+/* ---------- Out of order ---------- */
+.ooo-report-link{
+  display:inline-block; margin-top:8px; background:none; border:none; padding:2px 0;
+  color:var(--shell-muted, #9aa); font-size:12px; font-weight:600; text-decoration:underline;
+  cursor:pointer; opacity:.75;
+}
+.ooo-report-link:hover{ opacity:1; color:#c62828; }
+.ooo-soft-note{ margin-top:8px; font-size:12px; color:#b26a00; font-weight:600; }
+.ooo-hard{ padding:6px 0; text-align:center; }
+.ooo-hard-title{ font-size:15px; font-weight:800; color:#c62828; }
+.ooo-hard-sub{ font-size:12px; color:var(--popup-muted, #888); margin:4px 0 10px; }
+.ooo-working-btn{ width:100%; }
+.ooo-hard .ooo-report-link{ display:block; margin:8px auto 0; }

@@ -275,7 +275,7 @@ function makeIcon(id){
 }
 
 function emptyAgg(){ return {bathroomSum:0, bathroomCount:0}; }
-function emptyVote(){ return {store:0, bathroom:0, amenities:{}}; }
+function emptyVote(){ return {store:0, bathroom:0, amenities:{}, storeFeatures:{}, amenityMeta:{}}; }
 // Resize a marker whose popup is OPEN without calling setIcon(): swapping the icon element
 // out from under an open popup can break/close it on some mobile browsers, so instead we
 // mutate the existing icon element's size in place. Keeps the selected pin in sync with the
@@ -349,23 +349,38 @@ function amenityPriority(key, summary){
   return score;
 }
 
-// Build this visit's question list: the combined pool minus settled minus this person's own
-// yes/no answers minus their retired ones, ranked by priority, capped at QUESTIONS_PER_VISIT.
-// "Not sure" resurfacing (at most 1) and retirement are layered in Stage 3c via amenityMeta.
+// Build this visit's question list from the combined pool. Three groups, driven by this person's
+// per-amenity not-sure history (amenityMeta[key].notSure):
+//   • retired  (notSure >= 2)      → never shown again to this person
+//   • resurface (notSure === 1)    → eligible, but AT MOST ONE comes back per visit
+//   • fresh    (notSure 0/absent)  → normal
+// A question is also excluded if it's settled (confirmed / gas) or the person already gave a real
+// yes/no answer. Result: up to 1 resurfaced + fill to QUESTIONS_PER_VISIT with fresh, ranked by
+// priority. (1 resurface max even when no fresh remain.)
+const NOT_SURE_RETIRE = 2;
 function pickVisitQuestions(loc, myVote){
   const summary = { ...(amenityCache[loc.id] || {}), ...(storeFeatureCache[loc.id] || {}) };
   const mine = { ...(myVote.amenities || {}), ...(myVote.storeFeatures || {}) };
+  const meta = myVote.amenityMeta || {};
   const allKeys = [...BATHROOM_AMENITIES, ...STORE_FEATURES].map(a => a.key);
 
-  const pool = allKeys.filter(key => {
-    if(amenitySettled(loc, key, summary)) return false;         // confirmed / gas → skip
+  const eligible = allKeys.filter(key => {
+    if(amenitySettled(loc, key, summary)) return false;                 // confirmed / gas
     const ans = mine[key];
-    if(ans === 'yes' || ans === 'no' || (ans && ans !== 'unknown')) return false; // they answered it
-    return true;                                                // unconfirmed + unanswered-by-them
+    if(ans === 'yes' || ans === 'no' || (ans && ans !== 'unknown')) return false; // answered for real
+    const ns = (meta[key] && meta[key].notSure) || 0;
+    if(ns >= NOT_SURE_RETIRE) return false;                             // retired for this person
+    return true;
   });
 
-  pool.sort((a, b) => amenityPriority(b, summary) - amenityPriority(a, summary));
-  return pool.slice(0, QUESTIONS_PER_VISIT);
+  const byPriority = (a, b) => amenityPriority(b, summary) - amenityPriority(a, summary);
+  const fresh     = eligible.filter(k => !((meta[k] && meta[k].notSure) >= 1)).sort(byPriority);
+  const resurface = eligible.filter(k =>  ((meta[k] && meta[k].notSure) >= 1)).sort(byPriority);
+
+  const list = [];
+  if(resurface.length) list.push(resurface[0]);          // at most one previously-not-sure'd
+  for(const k of fresh){ if(list.length >= QUESTIONS_PER_VISIT) break; list.push(k); }
+  return list.slice(0, QUESTIONS_PER_VISIT);
 }
 
 const BATHROOM_AMENITIES = [
@@ -934,6 +949,41 @@ async function loadWeeklyRecap(){
   map.invalidateSize(); // header height may have just changed
 }
 
+// The rating section content. In the OOO HARD phase the star rating is suppressed entirely and
+// replaced by the ⚠️ status + "It's working now" button. In soft/none phases the normal rating
+// shows; a quiet "Report out of order" link sits under the stars (soft phase also shows an FYI).
+function ratingSectionInnerHtml(loc, agg, myVote){
+  const status = oooStatus(oooCache[loc.id]);
+  if(status.phase === 'hard'){
+    return oooHardHtml(loc, status);
+  }
+  const softNote = status.phase === 'soft'
+    ? `<div class="ooo-soft-note">⚠️ Reported out of order ${relativeTimeFromNow(status.since)} — might be working now.</div>`
+    : '';
+  return `<span class="rating-label">🚻 Rate this bathroom</span>
+      <div class="rating-score-line"><span class="rating-score">${avgStr(agg.bathroomSum, agg.bathroomCount)}★</span> ${ratingConfidenceHtml(agg.bathroomCount)}</div>
+      <div class="rate-stack" id="ratestack-bathroom-${loc.id}">
+        ${starsHtml(loc.id,'bathroom',myVote.bathroom)}
+        <div class="star-quip" id="quip-bathroom-${loc.id}">${quipFor('bathroom', myVote.bathroom)}</div>
+        <div class="rate-flash" id="flash-bathroom-${loc.id}" aria-live="polite"></div>
+      </div>
+      <div class="save-note" id="note-bathroom-${loc.id}"></div>
+      ${softNote}
+      <button type="button" class="ooo-report-link" id="ooo-report-${loc.id}">⚠️ Report out of order</button>`;
+}
+
+// The hard-phase readout: no stars, a clear notice, and an "It's working now" clear button. A
+// re-report ("still broken") button is offered too (GPS-gated) so persistent outages escalate.
+function oooHardHtml(loc, status){
+  return `<div class="ooo-hard">
+      <div class="ooo-hard-title">⚠️ Reported out of order</div>
+      <div class="ooo-hard-sub">Reported ${relativeTimeFromNow(status.since)}. Rating hidden until it's confirmed working.</div>
+      <button type="button" class="btn btn-primary ooo-working-btn" id="ooo-working-${loc.id}">✓ It's working now</button>
+      <button type="button" class="ooo-report-link" id="ooo-stillbroken-${loc.id}">Still broken — report again</button>
+      <div class="save-note" id="ooo-note-${loc.id}"></div>
+    </div>`;
+}
+
 function popupHtml(loc, agg, myVote){
   const shareUrl = `${location.origin}${location.pathname}?loc=${encodeURIComponent(loc.id)}`;
   const hoursText = formatHrsDisplay(loc);
@@ -972,15 +1022,8 @@ function popupHtml(loc, agg, myVote){
       </div>
       <div class="save-note" id="report-note-${loc.id}"></div>
     </div>
-    ${isLoggedIn() ? `<div class="rating-col single-rating">
-      <span class="rating-label">🚻 Rate this bathroom</span>
-      <div class="rating-score-line"><span class="rating-score">${avgStr(agg.bathroomSum, agg.bathroomCount)}★</span> ${ratingConfidenceHtml(agg.bathroomCount)}</div>
-      <div class="rate-stack" id="ratestack-bathroom-${loc.id}">
-        ${starsHtml(loc.id,'bathroom',myVote.bathroom)}
-        <div class="star-quip" id="quip-bathroom-${loc.id}">${quipFor('bathroom', myVote.bathroom)}</div>
-        <div class="rate-flash" id="flash-bathroom-${loc.id}" aria-live="polite"></div>
-      </div>
-      <div class="save-note" id="note-bathroom-${loc.id}"></div>
+    ${isLoggedIn() ? `<div class="rating-col single-rating" id="rating-section-${loc.id}">
+      ${ratingSectionInnerHtml(loc, agg, myVote)}
     </div>
     <div class="community-section${communitySectionHasContent(loc) ? '' : ' is-empty'}" id="community-section-${loc.id}">
       <div class="feature-title">✅ Confirmed by visitors</div>
@@ -1061,6 +1104,7 @@ function addMarker(loc){
     safeAttach(attachReportHandler);
     safeAttach(attachAmenityHandlers);
     safeAttach(attachStoreFeatureHandlers);
+    safeAttach(attachOooHandlers);
   });
   markers[loc.id] = marker;
 }
@@ -1226,6 +1270,55 @@ function attachReportHandler(loc){
   });
 }
 
+// Out-of-order: reads status on open and re-renders the rating section, then wires the report /
+// "it's working" / re-report actions. All three are GPS-gated (verifyNearby); the report action
+// also confirms first so it isn't tapped casually.
+async function attachOooHandlers(loc){
+  await loadOoo(loc.id);
+  const section = document.getElementById('rating-section-' + loc.id);
+  if(section){
+    section.innerHTML = ratingSectionInnerHtml(loc, ratingsCache[loc.id] || emptyAgg(), myVoteCache[loc.id] || emptyVote());
+    // Stars were re-rendered — re-bind their handlers (unless suppressed in the hard phase).
+    if(oooStatus(oooCache[loc.id]).phase !== 'hard') safeAttachStar(loc);
+  }
+  wireOoo(loc);
+}
+
+// Best-effort re-bind of star handlers after a rating-section re-render.
+function safeAttachStar(loc){ try{ attachStarHandlers(loc); }catch(e){} }
+
+function wireOoo(loc){
+  const noteId = 'ooo-note-' + loc.id;
+  const setNote = (msg, err) => { const n = document.getElementById(noteId) || document.getElementById('note-bathroom-' + loc.id); if(n){ n.style.color = err ? '#c62828' : ''; n.textContent = msg || ''; } };
+  const gatedWrite = async (writeFn, confirmMsg) => {
+    if(confirmMsg && !window.confirm(confirmMsg)) return;
+    setNote("Checking you're nearby…");
+    const v = await verifyNearby(loc);
+    if(!v.ok){ setNote('📍 You need to be at this stop to do that.', true); return; }
+    try{ await writeFn(); }catch(e){ setNote('Could not save — try again.', true); return; }
+    await loadOoo(loc.id);
+    const section = document.getElementById('rating-section-' + loc.id);
+    if(section){
+      section.innerHTML = ratingSectionInnerHtml(loc, ratingsCache[loc.id] || emptyAgg(), myVoteCache[loc.id] || emptyVote());
+      if(oooStatus(oooCache[loc.id]).phase !== 'hard') safeAttachStar(loc);
+      wireOoo(loc);   // re-bind after the swap
+    }
+    if(navigator.vibrate) navigator.vibrate(10);
+  };
+
+  const reportBtn = document.getElementById('ooo-report-' + loc.id);
+  if(reportBtn) reportBtn.addEventListener('click', () =>
+    gatedWrite(() => reportOutOfOrder(loc), 'Report this bathroom as out of order? This hides its rating and warns other visitors.'));
+
+  const stillBtn = document.getElementById('ooo-stillbroken-' + loc.id);
+  if(stillBtn) stillBtn.addEventListener('click', () =>
+    gatedWrite(() => reportOutOfOrder(loc), 'Report that this bathroom is still out of order?'));
+
+  const workingBtn = document.getElementById('ooo-working-' + loc.id);
+  if(workingBtn) workingBtn.addEventListener('click', () =>
+    gatedWrite(() => clearOutOfOrder(loc), null));
+}
+
 // Fetch every pin's real ratings in the background so the map colors itself in at a glance —
 // Firebase's free tier handles this fine, unlike the old sandboxed rate limit.
 
@@ -1279,14 +1372,25 @@ async function attachAmenityHandlers(loc){
     }
 
     const myVote = myVoteCache[loc.id] || emptyVote();
-    // Route the answer to the right field so store questions asked in the combined flow still
-    // aggregate as store features.
     const bathroom = isBathroomKey(key);
     const updatedVote = { ...myVote };
-    if(bathroom){
-      updatedVote.amenities = { ...(myVote.amenities || {}), [key]: value };
+    const meta = { ...(myVote.amenityMeta || {}) };
+
+    if(value === 'unknown'){
+      // "Not sure" — do NOT persist an answer (the amenity stays unconfirmed and askable). Bump
+      // this person's consecutive not-sure counter; at NOT_SURE_RETIRE it's retired for them.
+      const prev = (meta[key] && meta[key].notSure) || 0;
+      meta[key] = { notSure: prev + 1 };
+      updatedVote.amenityMeta = meta;
     } else {
-      updatedVote.storeFeatures = { ...(myVote.storeFeatures || {}), [key]: value };
+      // A real answer — record it in the right field and reset the not-sure counter (the "2 must
+      // be consecutive" rule: a real answer breaks the streak).
+      if(bathroom){
+        updatedVote.amenities = { ...(myVote.amenities || {}), [key]: value };
+      } else {
+        updatedVote.storeFeatures = { ...(myVote.storeFeatures || {}), [key]: value };
+      }
+      if(meta[key]){ meta[key] = { notSure: 0 }; updatedVote.amenityMeta = meta; }
     }
     myVoteCache[loc.id] = updatedVote;
 
@@ -1717,6 +1821,75 @@ function updateMostRecentBadge(){
 
 // Verified visit — requires being physically near a location before rating it
 const VERIFY_RADIUS_MILES = 0.3;
+
+// ---------- Out of order — two-phase lifecycle (v2.6) ----------
+// State is DERIVED from the out-of-order report timestamps for a location, so it decays on its own
+// with no server cron. Given the list of report timestamps (ms) within the current cycle:
+//   • Hard phase: rating suppressed, ⚠️ marker, Bathroom Now skips. Lasts 12h from the newest
+//     report — but 24h once 2+ reports pile up in the active window (persistently broken).
+//   • Soft phase: everything normal again, just an FYI note. From end-of-hard until 24h.
+//   • Cleared: past 24h from the newest report.
+// 24h hard is the cap (a 3rd+ report only resets the clock, never extends beyond 24h).
+const OOO_HARD_MS      = 12 * 3600 * 1000;
+const OOO_HARD_MAX_MS  = 24 * 3600 * 1000;
+const OOO_TOTAL_MS     = 24 * 3600 * 1000;
+
+// reports: array of {ts} (or ms numbers). Returns {phase:'hard'|'soft'|'none', since, reportCount, hardMs}.
+function oooStatus(reports, now){
+  now = now || Date.now();
+  const ts = (reports || []).map(r => (typeof r === 'number' ? r : r.ts)).filter(Boolean);
+  if(!ts.length) return { phase: 'none', reportCount: 0 };
+  // Only reports within the total window count toward the current cycle.
+  const active = ts.filter(t => now - t < OOO_TOTAL_MS).sort((a, b) => b - a);
+  if(!active.length) return { phase: 'none', reportCount: 0 };
+  const newest = active[0];
+  const age = now - newest;
+  const hardMs = active.length >= 2 ? OOO_HARD_MAX_MS : OOO_HARD_MS;   // escalation
+  let phase = 'soft';
+  if(age < hardMs) phase = 'hard';
+  else if(age >= OOO_TOTAL_MS) phase = 'none';
+  return { phase, since: newest, reportCount: active.length, hardMs };
+}
+
+// Lazy per-popup read of a location's out-of-order reports (mirrors the aggregate read pattern —
+// one query when a pin's popup opens, cached). "Cleared" reports (cleared:true) are ignored, so an
+// "It's working now" tap ends the cycle without waiting for the 24h timer.
+const oooCache = {};
+async function loadOoo(locId){
+  try{
+    const {db, collection, query, where, getDocs} = await fb();
+    const snap = await getDocs(query(collection(db, 'outOfOrder'), where('locId', '==', locId)));
+    const reports = [];
+    let clearedAfter = 0;
+    snap.forEach(d => {
+      const r = d.data();
+      if(r.cleared){ if(r.ts > clearedAfter) clearedAfter = r.ts; }
+      else reports.push(r.ts);
+    });
+    // Drop any report at/older than the most recent "it's working now" — that tap ends the cycle.
+    const live = reports.filter(t => t > clearedAfter);
+    oooCache[locId] = live;
+    return live;
+  }catch(e){ console.error('loadOoo failed', e); return []; }
+}
+
+async function reportOutOfOrder(loc){
+  const {db, collection, addDoc} = await fb();
+  await addDoc(collection(db, 'outOfOrder'), {
+    locId: loc.id, locName: loc.n, lat: loc.lat, lng: loc.lng,
+    reporterId: (window.__currentUser && window.__currentUser.uid) || getClientId(),
+    ts: Date.now(), cleared: false
+  });
+}
+
+async function clearOutOfOrder(loc){
+  const {db, collection, addDoc} = await fb();
+  // A "cleared" marker with the current time — loadOoo drops any report at/older than it.
+  await addDoc(collection(db, 'outOfOrder'), {
+    locId: loc.id, reporterId: (window.__currentUser && window.__currentUser.uid) || getClientId(),
+    ts: Date.now(), cleared: true
+  });
+}
 let lastKnownPos = null; // cached briefly so every star tap doesn't re-prompt GPS
 
 function getVerifiedPosition(){

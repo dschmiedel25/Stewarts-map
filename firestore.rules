@@ -117,6 +117,22 @@ service cloud.firestore {
 
 
     // ============================================================
+    //  Out-of-order reports (public, time-decaying)
+    // ============================================================
+    // Anyone may READ (the app derives a location's out-of-order phase from these on popup open).
+    // Signed-in users may CREATE a report or a "cleared" marker for their own id. Reports are
+    // immutable and never deleted from a client — the lifecycle is time-based (they simply age out
+    // of the 24h window), so there's nothing to edit or remove.
+    match /outOfOrder/{id} {
+      allow read:   if true;
+      allow create: if signedIn()
+        && request.resource.data.reporterId == request.auth.uid
+        && request.resource.data.locId is string;
+      allow update, delete: if false;
+    }
+
+
+    // ============================================================
     //  Location overrides (admin corrections)
     // ============================================================
     // The public app reads these to apply corrected hours/addresses/coordinates.
