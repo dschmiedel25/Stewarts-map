@@ -126,6 +126,7 @@
   .mini.dismiss{background:rgba(145,166,187,.1); color:#bac6d1}
   .mini.reopen{background:rgba(243,189,99,.12); color:var(--warning)}
   .mini.danger{background:rgba(239,91,99,.12); color:#ff8f95; border-color:rgba(239,91,99,.24)}
+  .btn.danger{background:rgba(239,91,99,.14); color:#ff8f95; border-color:rgba(239,91,99,.28)}
   .mini:disabled{opacity:.5; cursor:not-allowed}
 
   .pill{display:inline-flex; padding:4px 9px; border-radius:999px; font-size:10px; font-weight:850; text-transform:uppercase; letter-spacing:.05em}
@@ -307,6 +308,7 @@
     </div>
     <div class="modal-foot">
       <label class="resolve-check"><input type="checkbox" id="resolveOnSave" checked> Resolve this report on save</label>
+      <button class="btn danger" id="fixRemove">🗑 Remove pin</button>
       <button class="btn" id="fixCancel">Cancel</button>
       <button class="btn primary" id="fixSave">Save correction</button>
     </div>
@@ -707,6 +709,48 @@ $('#fixModal').addEventListener('input', e => {
 });
 
 $('#fixSave').addEventListener('click', saveFix);
+$('#fixRemove').addEventListener('click', removePin);
+
+// Permanent removal: writes {remove:true} to the location's override. The next `node
+// bake-overrides.js` run deletes the record from its *-locations.js file for good (and the app
+// drops the marker if live overrides are enabled). Use for not-a-real-location / permanently
+// closed stores. Also resolves the report if the box is checked.
+async function removePin(){
+  if(!currentFix) return;
+  const { locId, eff } = currentFix;
+  const label = (eff && (eff.locName || eff.addr)) || locId;
+  if(!confirm('Permanently remove this pin?\n\n' + label + '\n\nIt will be deleted at the next data bake + deploy and cannot be undone. Use only for stores that are permanently closed or not a real location.')) return;
+  const _rpt = allReports.find(r => r.locId === locId);
+  const _chain = (locById[locId] && locById[locId].chain) || (_rpt && _rpt.chainKey) || null;
+  const payload = {
+    remove: true,
+    removedAt: Date.now(),
+    removedByAdmin: currentUser.email || currentUser.uid
+  };
+  if(_chain) payload.chain = _chain;
+  const _nm = (locById[locId] && locById[locId].n) || (_rpt && _rpt.locName) || null;
+  if(_nm) payload.locName = _nm;
+
+  $('#fixRemove').disabled = true;
+  try{
+    await setDoc(doc(db, 'overrides', locId), payload, { merge: true });
+    // Resolve the report too if the checkbox is on (mirrors saveFix's resolve behavior).
+    if($('#resolveOnSave') && $('#resolveOnSave').checked && _rpt){
+      try{
+        await updateDoc(doc(db, 'reports', _rpt.id), { status: 'resolved', moderatorNote: 'Pin removed (permanent)', resolvedAt: Date.now() });
+        _rpt.status = 'resolved'; _rpt.moderatorNote = 'Pin removed (permanent)';
+      }catch(e){}
+    }
+    toast('Pin flagged for removal — gone at next bake + deploy.');
+    closeFix();
+    renderReports();
+    if(typeof updateBadges === 'function') updateBadges();
+  }catch(e){
+    console.error('removePin failed', e);
+    toast('Could not flag for removal — check the overrides write rule.', true);
+    $('#fixRemove').disabled = false;
+  }
+}
 
 async function saveFix(){
   if(!currentFix) return;

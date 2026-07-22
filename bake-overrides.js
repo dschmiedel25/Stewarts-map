@@ -134,11 +134,25 @@ function main(){
   const changedFiles = new Set();
   const unmatched = [];
   let applied = 0, created = 0;
+  const removedIds = new Set();
   for(const id of overrideIds){
+    const ov = overrides[id];
+    // Permanent removal: an override flagged {remove:true} deletes the record from its file
+    // entirely (bad OSM data, not-a-real-location, permanently closed). Permanent = permanent.
+    if(ov && ov.remove === true){
+      const hit = byId[id];
+      if(hit){
+        removedIds.add(id);
+        changedFiles.add(hit.file);
+        console.log('  - REMOVED ' + id + '  ->  ' + hit.file + '  (' + (hit.record.n || '') + ')');
+      } else {
+        console.log('  (remove ' + id + ' — no matching record, nothing to delete)');
+      }
+      continue;
+    }
     const hit = byId[id];
     if(!hit){
       // No existing record — treat as a NEW store if the override tells us its chain.
-      const ov = overrides[id];
       const file = ov && ov.chain ? chainToFile[ov.chain] || chainToFile[String(ov.chain).toLowerCase()] : null;
       if(!file){ unmatched.push(id); continue; }
       if(!isValidCoord(ov.lat) || !isValidCoord(ov.lng)){
@@ -161,6 +175,16 @@ function main(){
     }
   }
 
+  // Actually drop the removed records from their files before serializing.
+  let removed = 0;
+  if(removedIds.size){
+    for(const f of changedFiles){
+      const before = loaded[f].records.length;
+      loaded[f].records = loaded[f].records.filter(r => !(r && r.id && removedIds.has(r.id)));
+      removed += before - loaded[f].records.length;
+    }
+  }
+
   // Write only the files that actually changed.
   if(changedFiles.size){
     fs.mkdirSync(outDir, { recursive: true });
@@ -170,7 +194,7 @@ function main(){
     }
   }
 
-  console.log('\nDone. ' + applied + ' updated, ' + created + ' created, across ' + changedFiles.size + ' file(s).');
+  console.log('\nDone. ' + applied + ' updated, ' + created + ' created, ' + removed + ' removed, across ' + changedFiles.size + ' file(s).');
   if(changedFiles.size) console.log('Updated files written to: ' + outDir);
   if(unmatched.length){
     console.log('\nWARNING: ' + unmatched.length + ' override(s) had no matching location and were skipped:');

@@ -2280,6 +2280,15 @@ async function loadOverrides(){
 // Merge one override document onto its location record (in place) and refresh its
 // marker/popup. Returns true if the coordinates changed (so the pin was moved).
 function applyOverrideToLocation(loc, data){
+  // Permanent removal flag (bad data / not-a-real-location / permanently closed). If live
+  // overrides are enabled, this pulls the marker off the map immediately; the bake step deletes
+  // the record for good.
+  if(data.remove === true || data.hidden === true){
+    loc._removed = true;
+    const m = markers[loc.id];
+    if(m){ try{ markerCluster.removeLayer(m); }catch(e){} delete markers[loc.id]; }
+    return false;
+  }
   ['hrs','addr','city','state','zipCode','phone'].forEach(f => {
     if(data[f] !== undefined) loc[f] = data[f];
   });
