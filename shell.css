@@ -435,3 +435,12 @@ body:not(.logged-in) #appDrawer #navAppPref{ display:none !important; }
 .access-indicator{ font-size:15px; line-height:1; }
 .access-indicator.community{ filter:none; }                 /* green-tier: community-confirmed */
 .access-indicator.verified{ opacity:.85; }                  /* teal-tier: OSM-verified */
+
+/* ---------- Drawer close (X) button ---------- */
+#appDrawer .d-close{
+  margin-left:auto; align-self:flex-start;
+  background:transparent; border:none; color:var(--shell-ink);
+  font-size:22px; line-height:1; padding:2px 4px; cursor:pointer;
+  opacity:.7;
+}
+#appDrawer .d-close:hover{ opacity:1; }

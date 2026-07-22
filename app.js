@@ -846,15 +846,8 @@ function popupHtml(loc, agg, myVote){
     ${recencyLine}
     <div class="popup-actions">
       <button class="btn btn-primary directions-btn" id="directions-btn-${loc.id}" data-lat="${loc.lat}" data-lng="${loc.lng}">🧭 Directions</button>
-      <button class="btn btn-secondary nav-change-btn" id="nav-change-${loc.id}" title="Change navigation app">⚙️</button>
       <button class="btn btn-secondary btn-icon-only share-btn" title="Share" data-shareurl="${shareUrl}" data-sharename="${loc.n.replace(/"/g,'&quot;')}">🔗</button>
       <button class="btn btn-danger btn-icon-only report-toggle-btn" title="Report an issue" id="report-toggle-${loc.id}">🚩</button>
-    </div>
-    <div class="nav-chooser" id="nav-chooser-${loc.id}" style="display:none;">
-      <div class="rating-label" style="color:#333;">Open directions with:</div>
-      <button class="btn btn-secondary nav-choice-btn" data-app="google">Google Maps</button>
-      <button class="btn btn-secondary nav-choice-btn" data-app="waze">Waze</button>
-      <button class="btn btn-secondary nav-choice-btn" data-app="apple">Apple Maps</button>
     </div>
     <div class="report-section" id="report-section-${loc.id}" style="display:none;">
       <div class="tip-input-row">
@@ -973,36 +966,15 @@ function resolveNavApp(){
 
 function attachDirectionsHandler(loc){
   const btnOrig = document.getElementById('directions-btn-' + loc.id);
-  const changeBtnOrig = document.getElementById('nav-change-' + loc.id);
-  const chooser = document.getElementById('nav-chooser-' + loc.id);
-  if(!btnOrig || !chooser || !changeBtnOrig) return;
+  if(!btnOrig) return;
 
   const btn = btnOrig.cloneNode(true);
   btnOrig.parentNode.replaceChild(btn, btnOrig);
-  const changeBtn = changeBtnOrig.cloneNode(true);
-  changeBtnOrig.parentNode.replaceChild(changeBtn, changeBtnOrig);
-
-  const openWith = (app) => {
-    window.open(buildNavUrl(app, btn.dataset.lat, btn.dataset.lng), '_blank', 'noopener');
-  };
 
   btn.addEventListener('click', () => {
-    openWith(resolveNavApp());   // explicit saved pref, else the device default (Apple on Apple, Google elsewhere)
-  });
-
-  changeBtn.addEventListener('click', () => {
-    chooser.style.display = chooser.style.display === 'none' ? 'flex' : 'none';
-  });
-
-  chooser.querySelectorAll('.nav-choice-btn').forEach(choiceBtnOrig => {
-    const choiceBtn = choiceBtnOrig.cloneNode(true);
-    choiceBtnOrig.parentNode.replaceChild(choiceBtn, choiceBtnOrig);
-    choiceBtn.addEventListener('click', () => {
-      const app = choiceBtn.dataset.app;
-      localStorage.setItem('preferredNavApp', app);
-      chooser.style.display = 'none';
-      openWith(app);
-    });
+    // Opens with the user's saved maps-app preference (set in the drawer), else the device
+    // default (Apple on Apple hardware, Google elsewhere). The per-popup gear picker was removed.
+    window.open(buildNavUrl(resolveNavApp(), btn.dataset.lat, btn.dataset.lng), '_blank', 'noopener');
   });
 }
 
