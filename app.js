@@ -903,6 +903,18 @@ async function saveMyVote(id, data){
       if(myVoteCache[id]) myVoteCache[id].ratedAt = payload.ratedAt;
     }
     await setDoc(doc(db, 'votes', id + '_' + clientId), payload, { merge: true });
+    // Mirror this rating into the user's OWN profile doc (users/{uid}) so the Passport and the
+    // whole "my ratings" load cost ONE read no matter how many ratings they have. The votes doc
+    // above stays the source of truth for the aggregate Cloud Function. Logged-in only (the rules
+    // require it, and only logged-in users can rate). Non-critical: if this write is ever denied
+    // (e.g. rules not deployed yet) the app just falls back to the per-vote query on load.
+    if(isLoggedIn()){
+      try{
+        await setDoc(doc(db, 'users', clientId),
+          { uid: clientId, username: uname || '', lastUpdated: Date.now(), ratings: { [id]: payload } },
+          { merge: true });
+      }catch(e){ /* non-critical */ }
+    }
     return true;
   }catch(e){
     return false;
@@ -1571,17 +1583,38 @@ async function loadAllRatings(){
   // Loads only THIS user's own votes (a handful of docs). Community ratings are NOT bulk-read
   // anymore — that was thousands of reads on every load and after every auth change. Each
   // location's aggregate now loads on demand when its popup opens (one getDoc per open).
-  const {db, collection, getDocs, query, where} = await fb();
+  const {db, collection, getDocs, query, where, doc, getDoc, setDoc} = await fb();
 
   const voteByLoc = {};
+  const uid = getEffectiveId();
   try{
-    const mineSnap = await getDocs(query(collection(db, 'votes'), where('clientId', '==', getEffectiveId())));
-    mineSnap.forEach(d => {
-      const v = d.data();
-      const locId = v.locId || d.id.split('_')[0];
-      voteByLoc[locId] = { ...emptyVote(), ...v };
-    });
-  }catch(e){ console.error('bulk votes load failed', e); }
+    let usedProfileDoc = false;
+    // Fast path: ONE read of the user's own profile doc returns all their ratings at once.
+    if(isLoggedIn()){
+      const uSnap = await getDoc(doc(db, 'users', uid));
+      if(uSnap.exists() && uSnap.data().ratings){
+        const ratings = uSnap.data().ratings;
+        Object.keys(ratings).forEach(locId => { voteByLoc[locId] = { ...emptyVote(), ...ratings[locId] }; });
+        usedProfileDoc = true;
+      }
+    }
+    // Fallback: users who rated before the profile doc existed. Read the per-vote docs once, then
+    // backfill the profile doc so their NEXT load is a single read.
+    if(!usedProfileDoc){
+      const mineSnap = await getDocs(query(collection(db, 'votes'), where('clientId', '==', uid)));
+      const ratings = {};
+      mineSnap.forEach(d => {
+        const v = d.data();
+        const locId = v.locId || d.id.split('_')[0];
+        voteByLoc[locId] = { ...emptyVote(), ...v };
+        ratings[locId] = v;
+      });
+      if(isLoggedIn() && Object.keys(ratings).length){
+        const uname = (window.__currentUser && window.__currentUser.email) ? window.__currentUser.email.split('@')[0] : '';
+        try{ await setDoc(doc(db, 'users', uid), { uid, username: uname, lastUpdated: Date.now(), ratings }, { merge: true }); }catch(e){}
+      }
+    }
+  }catch(e){ console.error('my ratings load failed', e); }
 
   seedLocations.forEach(loc => {
     const agg = ratingsCache[loc.id] || emptyAgg();
