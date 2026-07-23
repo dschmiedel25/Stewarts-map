@@ -1,0 +1,473 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>BathroomReport · Metro Cleaner</title>
+<style>
+  :root{
+    --ink:#14202b;
+    --ink-soft:#3a4a58;
+    --paper:#e9edf0;
+    --panel:#ffffff;
+    --line:#cdd6dd;
+    --sign:#0e7c5a;      /* wayfinding facility green */
+    --sign-dim:#0e7c5a1a;
+    --flag:#c1740c;      /* dropped / flagged amber */
+    --drop:#b23b3b;      /* hard drop red */
+    --mono:ui-monospace,"SF Mono","JetBrains Mono",Menlo,Consolas,monospace;
+    --sans:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0}
+  body{
+    background:var(--paper);
+    color:var(--ink);
+    font-family:var(--sans);
+    line-height:1.5;
+    -webkit-text-size-adjust:100%;
+    padding:20px 16px 64px;
+  }
+  .wrap{max-width:640px;margin:0 auto}
+  header{margin-bottom:22px}
+  .eyebrow{
+    font-family:var(--mono);font-size:11px;letter-spacing:.18em;
+    text-transform:uppercase;color:var(--sign);margin:0 0 6px;
+  }
+  h1{font-size:23px;letter-spacing:-.01em;margin:0;font-weight:700}
+  .sub{color:var(--ink-soft);font-size:14px;margin:6px 0 0}
+
+  .card{
+    background:var(--panel);border:1px solid var(--line);
+    border-radius:10px;padding:18px;margin-bottom:16px;
+  }
+  label{display:block;font-size:13px;font-weight:600;margin:0 0 6px}
+  .hint{font-weight:400;color:var(--ink-soft);font-size:12px}
+  input[type=text],select{
+    width:100%;font-family:var(--mono);font-size:15px;
+    padding:11px 12px;border:1px solid var(--line);border-radius:8px;
+    background:#fbfcfd;color:var(--ink);
+  }
+  input[type=text]:focus,select:focus{outline:2px solid var(--sign);border-color:var(--sign)}
+  .row{display:flex;gap:12px;flex-wrap:wrap;margin-top:14px}
+  .row > div{flex:1 1 160px}
+
+  .file-drop{
+    border:1.5px dashed var(--line);border-radius:8px;padding:20px;
+    text-align:center;background:#fbfcfd;cursor:pointer;
+  }
+  .file-drop.armed{border-color:var(--sign);background:var(--sign-dim)}
+  .file-drop input{display:none}
+  .file-name{font-family:var(--mono);font-size:13px;margin-top:8px;color:var(--sign)}
+
+  button.go{
+    width:100%;margin-top:16px;padding:13px;border:none;border-radius:8px;
+    background:var(--ink);color:#fff;font-size:15px;font-weight:600;cursor:pointer;
+    font-family:var(--sans);
+  }
+  button.go:disabled{opacity:.4;cursor:not-allowed}
+  button.go:not(:disabled):active{transform:translateY(1px)}
+
+  /* results readout — the signature: an audit board */
+  .board{display:none}
+  .board.on{display:block}
+  .tally{
+    font-family:var(--mono);border-top:1px solid var(--line);
+  }
+  .tally .line{
+    display:flex;justify-content:space-between;align-items:baseline;
+    padding:9px 0;border-bottom:1px solid var(--line);font-size:14px;
+  }
+  .tally .line .lbl{color:var(--ink-soft);letter-spacing:.02em}
+  .tally .line .val{font-weight:700;font-variant-numeric:tabular-nums}
+  .tally .hero{padding:14px 0}
+  .tally .hero .lbl{color:var(--ink);font-weight:600;font-size:15px}
+  .tally .hero .val{font-size:28px;color:var(--sign)}
+  .val.flag{color:var(--flag)} .val.drop{color:var(--drop)}
+  .breakdown{margin-top:14px}
+  .breakdown h3{font-size:12px;letter-spacing:.12em;text-transform:uppercase;
+    color:var(--ink-soft);margin:0 0 8px;font-family:var(--mono)}
+
+  .log{
+    font-family:var(--mono);font-size:12px;color:var(--ink-soft);
+    background:#f4f7f9;border:1px solid var(--line);border-radius:8px;
+    padding:12px;margin-top:14px;max-height:190px;overflow:auto;white-space:pre-wrap;
+  }
+  .log b{color:var(--sign)} .log .w{color:var(--flag)} .log .d{color:var(--drop)}
+
+  .actions{display:flex;gap:12px;margin-top:16px;flex-wrap:wrap}
+  .actions a,.actions button{
+    flex:1 1 160px;text-align:center;text-decoration:none;
+    padding:12px;border-radius:8px;font-size:14px;font-weight:600;cursor:pointer;
+    font-family:var(--sans);border:1px solid var(--sign);
+  }
+  a.dl{background:var(--sign);color:#fff;border-color:var(--sign)}
+  button.copy{background:#fff;color:var(--sign)}
+  .copyline{font-family:var(--mono);font-size:12px;margin-top:10px;color:var(--ink-soft);word-break:break-all}
+  .err{color:var(--drop);font-family:var(--mono);font-size:13px;margin-top:10px}
+  textarea.io{width:100%;font-family:var(--mono);font-size:12px;line-height:1.45;
+    padding:11px 12px;border:1px solid var(--line);border-radius:8px;background:#fbfcfd;
+    color:var(--ink);min-height:120px;resize:vertical;white-space:pre;overflow:auto}
+  textarea.io:focus{outline:2px solid var(--sign);border-color:var(--sign)}
+  .divider{display:flex;align-items:center;gap:10px;margin:18px 0 6px;
+    color:var(--ink-soft);font-family:var(--mono);font-size:11px;letter-spacing:.12em;text-transform:uppercase}
+  .divider::before,.divider::after{content:"";flex:1;height:1px;background:var(--line)}
+  .seg{display:flex;margin:16px 0 8px;border:1px solid var(--line);border-radius:8px;overflow:hidden}
+  .seg button{flex:1;padding:9px 4px;border:none;background:#fff;font-family:var(--mono);
+    font-size:13px;color:var(--ink-soft);cursor:pointer}
+  .seg button.sel{background:var(--ink);color:#fff}
+  .seg button+button{border-left:1px solid var(--line)}
+  .fmt-note{font-family:var(--mono);font-size:11px;color:var(--ink-soft);margin:2px 0 10px}
+  footer{font-family:var(--mono);font-size:11px;color:var(--ink-soft);text-align:center;margin-top:26px;letter-spacing:.03em}
+  @media (prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <p class="eyebrow">BathroomReport · data ops</p>
+    <h1>Metro Cleaner</h1>
+    <p class="sub">Drop a metro <code>amenity=toilets</code> geojson. It normalizes to the access-layer schema, drops private, collapses gender-split pairs, tags the metro, and counts what's left.</p>
+  </header>
+
+  <div class="card">
+    <label for="metro">Metro tag <span class="hint">— rides on every record; keep <code>national</code> reserved for pit-stops</span></label>
+    <input type="text" id="metro" placeholder="nyc" autocapitalize="off" autocorrect="off" spellcheck="false">
+
+    <div class="row">
+      <div>
+        <label for="stype">Layer <span class="hint">(source_type)</span></label>
+        <select id="stype">
+          <option value="auto">Auto-detect</option>
+          <option value="public_civic">public_civic</option>
+          <option value="chain_customer">chain_customer</option>
+        </select>
+      </div>
+      <div>
+        <label for="thresh">Gender-collapse radius <span class="hint">(m)</span></label>
+        <input type="text" id="thresh" value="25" inputmode="numeric">
+      </div>
+    </div>
+
+    <div class="row"><div style="flex-basis:100%">
+      <label>Source file</label>
+      <div class="file-drop" id="drop">
+        <input type="file" id="file" accept=".geojson,.json,application/geo+json,application/json">
+        Tap to choose a .geojson
+        <div class="file-name" id="fname"></div>
+      </div>
+    </div></div>
+
+    <div class="divider">or paste</div>
+    <div class="row"><div style="flex-basis:100%">
+      <label for="pastein">Paste geojson <span class="hint">— if you can't download the Overpass export, drop the raw text here</span></label>
+      <textarea class="io" id="pastein" placeholder='{ "type": "FeatureCollection", "features": [ ... ] }' spellcheck="false" autocapitalize="off" autocorrect="off"></textarea>
+    </div></div>
+
+    <button class="go" id="run" disabled>Clean &amp; count</button>
+    <div class="err" id="err"></div>
+  </div>
+
+  <div class="card board" id="board">
+    <div class="tally" id="tally"></div>
+    <div class="breakdown">
+      <h3>By access level</h3>
+      <div class="tally" id="byaccess"></div>
+    </div>
+    <div class="log" id="log"></div>
+    <div class="seg" id="seg">
+      <button data-f="geojson" class="sel">.geojson</button>
+      <button data-f="json">.json</button>
+      <button data-f="js">.js</button>
+    </div>
+    <div class="fmt-note" id="fmtnote"></div>
+    <textarea class="io" id="out" readonly spellcheck="false"></textarea>
+    <div class="actions">
+      <a class="dl" id="dl" download>Download file</a>
+      <button class="copy" id="copy">Copy output</button>
+    </div>
+    <div class="copyline" id="copyline"></div>
+  </div>
+
+  <footer>runs entirely in your browser · nothing uploaded · deploy to Pages or open the file</footer>
+</div>
+
+<script>
+/* ---------- geometry ---------- */
+function polyCentroid(ring){
+  // shoelace centroid; fall back to vertex mean for degenerate rings
+  let a=0,cx=0,cy=0;
+  for(let i=0;i<ring.length-1;i++){
+    const [x0,y0]=ring[i],[x1,y1]=ring[i+1];
+    const f=x0*y1-x1*y0; a+=f; cx+=(x0+x1)*f; cy+=(y0+y1)*f;
+  }
+  if(Math.abs(a)<1e-12){
+    let sx=0,sy=0,n=ring.length-1;
+    for(let i=0;i<n;i++){sx+=ring[i][0];sy+=ring[i][1];}
+    return [sx/n,sy/n];
+  }
+  a*=0.5; return [cx/(6*a),cy/(6*a)];
+}
+function coordsOf(f){
+  const g=f.geometry; if(!g) return null;
+  if(g.type==="Point") return g.coordinates;
+  if(g.type==="Polygon") return polyCentroid(g.coordinates[0]);
+  if(g.type==="MultiPolygon") return polyCentroid(g.coordinates[0][0]);
+  return null;
+}
+function haversine(a,b){ // [lng,lat] -> meters
+  const R=6371000,tr=Math.PI/180;
+  const dLat=(b[1]-a[1])*tr, dLng=(b[0]-a[0])*tr;
+  const s=Math.sin(dLat/2)**2+Math.cos(a[1]*tr)*Math.cos(b[1]*tr)*Math.sin(dLng/2)**2;
+  return 2*R*Math.asin(Math.sqrt(s));
+}
+
+/* ---------- normalization ---------- */
+const CHAINS=["dunkin","starbucks","mcdonald","wawa","sheetz","7-eleven","circle k","speedway","cumberland"];
+function detectLayer(p,forced){
+  if(forced!=="auto") return forced;
+  const brandish=(p.brand||p.name||p.operator||"").toLowerCase();
+  if(p.brand) return "chain_customer";
+  if(CHAINS.some(c=>brandish.includes(c))) return "chain_customer";
+  return "public_civic";
+}
+function normAccess(p){
+  const a=(p.access||"").toLowerCase();
+  if(a==="private") return "DROP";
+  if(a==="no") return "DROP";
+  if(a==="customers") return "customer";
+  if(a==="yes"||a==="permissive") return "public";
+  return "unknown";
+}
+function normWheel(p){
+  const w=(p.wheelchair||p["toilets:wheelchair"]||"").toLowerCase();
+  if(w==="yes"||w==="designated") return "yes";
+  if(w==="limited") return "limited";
+  if(w==="no") return "no";
+  return "unknown";
+}
+function normFee(p){
+  const f=(p.fee||"").toLowerCase();
+  if(f==="no") return "free";
+  if(f==="yes") return "paid";
+  return "unknown";
+}
+function normGender(p){
+  const uni=(p.unisex||p["toilets:unisex"]||"").toLowerCase();
+  const m=(p.male||p["toilets:male"]||"").toLowerCase();
+  const fm=(p.female||p["toilets:female"]||"").toLowerCase();
+  const maleOnly = (m==="yes"||m==="only") && fm!=="yes" && fm!=="only";
+  const femOnly  = (fm==="yes"||fm==="only") && m!=="yes" && m!=="only";
+  if(uni==="yes") return "unisex";
+  if((m==="yes"||m==="only")&&(fm==="yes"||fm==="only")) return "segregated";
+  if(maleOnly) return "male_only";
+  if(femOnly) return "female_only";
+  if(uni==="no") return "segregated";
+  return "unknown";
+}
+function normConfidence(p){
+  const fix = p.fixme || (p.access||"").toLowerCase()==="no";
+  const cd = p.check_date;
+  if(fix) return "low";
+  if(cd){
+    const yrs=(Date.now()-new Date(cd).getTime())/3.156e10;
+    if(isNaN(yrs)) return "medium";
+    return yrs>2 ? "low" : "high";
+  }
+  return "medium";
+}
+function normalize(f,metro,forced){
+  const p=f.properties||{};
+  const access=normAccess(p);
+  return {
+    source_id: p["@id"]||f.id||null,
+    metro,
+    layer: detectLayer(p,forced),
+    name: p.name||null,
+    access_level: access,          // may be "DROP"
+    fee: normFee(p),
+    wheelchair: normWheel(p),
+    gender: normGender(p),
+    hours: p.opening_hours||null,
+    disposal: (p["toilets:disposal"]||"unknown").toLowerCase(),
+    changing_table: p.changing_table==="yes" ? true : (p.changing_table==="no" ? false : null),
+    confidence: normConfidence(p),
+    seasonal: (p.seasonal==="yes"||p["toilets:seasonal"]==="yes"),
+    _coord: coordsOf(f)
+  };
+}
+
+/* ---------- gender-split collapse ---------- */
+function betterAccess(a,b){const r=["public","customer","unknown"];return r.indexOf(a)<=r.indexOf(b)?a:b;}
+function betterWheel(a,b){const r=["yes","limited","no","unknown"];return r.indexOf(a)<=r.indexOf(b)?a:b;}
+function collapse(recs,radius){
+  const used=new Array(recs.length).fill(false);
+  const out=[]; let merged=0;
+  for(let i=0;i<recs.length;i++){
+    if(used[i]) continue;
+    const a=recs[i];
+    if(a.gender==="male_only"||a.gender==="female_only"){
+      let best=-1,bd=radius;
+      for(let j=i+1;j<recs.length;j++){
+        if(used[j]) continue;
+        const b=recs[j];
+        const complement=(a.gender==="male_only"&&b.gender==="female_only")||
+                         (a.gender==="female_only"&&b.gender==="male_only");
+        if(!complement||!a._coord||!b._coord) continue;
+        const d=haversine(a._coord,b._coord);
+        if(d<bd){bd=d;best=j;}
+      }
+      if(best>=0){
+        const b=recs[best]; used[i]=used[best]=true; merged++;
+        out.push({...a,
+          gender:"segregated",
+          _coord:[(a._coord[0]+b._coord[0])/2,(a._coord[1]+b._coord[1])/2],
+          access_level:betterAccess(a.access_level,b.access_level),
+          wheelchair:betterWheel(a.wheelchair,b.wheelchair),
+          changing_table:(a.changing_table||b.changing_table)||null,
+          confidence:(a.confidence==="high"||b.confidence==="high")?"high":a.confidence,
+          source_id:(a.source_id||"")+"+"+(b.source_id||"")
+        });
+        continue;
+      }
+    }
+    used[i]=true; out.push(a);
+  }
+  return {out,merged};
+}
+
+/* ---------- pipeline ---------- */
+function process(fc,metro,forced,radius){
+  const feats=fc.features||[];
+  const log=[]; let dropped=0,noGeom=0;
+  let recs=[];
+  for(const f of feats){
+    const r=normalize(f,metro,forced);
+    if(!r._coord){noGeom++;continue;}
+    if(r.access_level==="DROP"){dropped++;continue;}
+    recs.push(r);
+  }
+  const {out,merged}=collapse(recs,radius);
+  log.push(`<b>${feats.length}</b> features in`);
+  if(noGeom) log.push(`<span class="d">${noGeom}</span> skipped (no geometry)`);
+  log.push(`<span class="d">${dropped}</span> dropped (access=private / no)`);
+  log.push(`<span class="w">${merged}</span> gender-split pairs collapsed → segregated`);
+  log.push(`<b>${out.length}</b> clean records tagged metro=${metro}`);
+
+  const byAccess={}; const byLayer={};
+  for(const r of out){
+    byAccess[r.access_level]=(byAccess[r.access_level]||0)+1;
+    byLayer[r.layer]=(byLayer[r.layer]||0)+1;
+  }
+  // build output geojson (Point features)
+  const rnd=n=>+n.toFixed(7);
+  const outFC={type:"FeatureCollection",generator:"BathroomReport Metro Cleaner",
+    features:out.map(r=>{
+      const {_coord,...props}=r;
+      return {type:"Feature",properties:props,geometry:{type:"Point",coordinates:[rnd(_coord[0]),rnd(_coord[1])]}};
+    })};
+  const flat=out.map(r=>{const {_coord,...p}=r;return {...p,lng:rnd(_coord[0]),lat:rnd(_coord[1])};});
+  return {outFC,flat,count:out.length,dropped,merged,noGeom,byAccess,byLayer,log,inCount:feats.length};
+}
+
+/* ---------- UI ---------- */
+const $=id=>document.getElementById(id);
+let parsed=null, result=null;
+
+function refreshRun(){ $("run").disabled=!(parsed && $("metro").value.trim()); }
+$("metro").addEventListener("input",refreshRun);
+
+function tryParse(txt){
+  try{
+    const j=JSON.parse(txt);
+    if(j.type!=="FeatureCollection"||!Array.isArray(j.features)) return null;
+    return j;
+  }catch(_){ return null; }
+}
+
+$("drop").addEventListener("click",()=>$("file").click());
+$("file").addEventListener("change",e=>{
+  const f=e.target.files[0]; $("err").textContent="";
+  if(!f) return;
+  $("fname").textContent=f.name; $("drop").classList.add("armed");
+  const rd=new FileReader();
+  rd.onload=()=>{
+    const j=tryParse(rd.result);
+    if(j){ parsed=j; $("pastein").value=""; refreshRun(); }
+    else { parsed=null; refreshRun();
+      $("err").textContent="That file isn't a GeoJSON FeatureCollection. Export from Overpass as GeoJSON and try again."; }
+  };
+  rd.readAsText(f);
+});
+
+$("pastein").addEventListener("input",()=>{
+  const v=$("pastein").value.trim(); $("err").textContent="";
+  if(!v){ if(!$("file").files.length) parsed=null; refreshRun(); return; }
+  const j=tryParse(v);
+  if(j){ parsed=j; $("fname").textContent=""; $("drop").classList.remove("armed"); refreshRun(); }
+  else { parsed=null; refreshRun();
+    $("err").textContent="Pasted text isn't a valid GeoJSON FeatureCollection yet — needs a features array."; }
+});
+
+$("run").addEventListener("click",()=>{
+  if(!parsed) return;
+  const metro=$("metro").value.trim().toLowerCase();
+  const forced=$("stype").value;
+  const radius=Math.max(1,parseFloat($("thresh").value)||25);
+  result=process(parsed,metro,forced,radius);
+
+  // hero + tally
+  const t=$("tally");
+  t.innerHTML=`
+    <div class="line hero"><span class="lbl">${metro} · clean records</span><span class="val">${result.count.toLocaleString()}</span></div>
+    <div class="line"><span class="lbl">features in</span><span class="val">${result.inCount.toLocaleString()}</span></div>
+    <div class="line"><span class="lbl">dropped (private / no)</span><span class="val drop">${result.dropped}</span></div>
+    <div class="line"><span class="lbl">gender pairs collapsed</span><span class="val flag">${result.merged}</span></div>
+    ${result.noGeom?`<div class="line"><span class="lbl">skipped (no geometry)</span><span class="val drop">${result.noGeom}</span></div>`:""}
+    ${Object.entries(result.byLayer).map(([k,v])=>`<div class="line"><span class="lbl">layer · ${k}</span><span class="val">${v}</span></div>`).join("")}
+  `;
+  $("byaccess").innerHTML=Object.entries(result.byAccess)
+    .map(([k,v])=>`<div class="line"><span class="lbl">${k}</span><span class="val">${v}</span></div>`).join("");
+  $("log").innerHTML=result.log.join("\n");
+
+  // three output shapes, one per consumer
+  const safe=(metro.replace(/\W+/g,"")||"metro");
+  const texts={
+    geojson: JSON.stringify(result.outFC),
+    json: JSON.stringify(result.flat,null,2),
+    js: `window.BR_DATA_${safe} = ${JSON.stringify(result.flat)};`
+  };
+  const names={
+    geojson:`bathroomreport_${metro}_clean.geojson`,
+    json:`bathroomreport_${metro}_clean.json`,
+    js:`bathroomreport_${metro}_clean.js`
+  };
+  const notes={
+    geojson:"FeatureCollection of Points — archive / Leaflet / re-import.",
+    json:"Flat array with lat/lng fields — the shape a Firestore import wants.",
+    js:`Same array as window.BR_DATA_${safe} — <script src> it in, no fetch needed.`
+  };
+  function showFmt(f){
+    [...$("seg").children].forEach(b=>b.classList.toggle("sel",b.dataset.f===f));
+    $("out").value=texts[f];
+    $("fmtnote").textContent=notes[f];
+    const blob=new Blob([texts[f]],{type:f==="js"?"application/javascript":"application/json"});
+    $("dl").href=URL.createObjectURL(blob); $("dl").download=names[f];
+  }
+  [...$("seg").children].forEach(b=>b.onclick=()=>showFmt(b.dataset.f));
+  showFmt("geojson");
+
+  $("copy").onclick=()=>{
+    const txt=$("out").value; const done=()=>{ $("copy").textContent="Copied";
+      setTimeout(()=>$("copy").textContent="Copy output",1200); };
+    if(navigator.clipboard){ navigator.clipboard.writeText(txt).then(done,()=>{$("out").select();done();}); }
+    else { $("out").select(); document.execCommand&&document.execCommand("copy"); done(); }
+  };
+
+  $("copyline").textContent=`counts.json → "${metro}": ${result.count}`;
+  $("board").classList.add("on");
+  $("board").scrollIntoView({behavior:"smooth",block:"start"});
+});
+</script>
+</body>
+</html>
