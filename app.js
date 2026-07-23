@@ -64,6 +64,8 @@ function applyTheme(theme){
   if(btn){
     const ic = btn.querySelector('.theme-ico');
     if(ic) ic.textContent = theme === 'light' ? '☀️' : '🌙';
+    const lbl = btn.querySelector('.theme-label');
+    if(lbl) lbl.textContent = theme === 'light' ? 'Light mode' : 'Dark mode';
     btn.classList.toggle('on', theme === 'light');
   }
   if(typeof setMapTilesForTheme === 'function') setMapTilesForTheme(theme);
@@ -263,8 +265,7 @@ function setMapTilesForTheme(theme){
 // Now that map + tiles exist, apply the actual initial theme (this triggers the right tile set too)
 (function(){
   const saved = localStorage.getItem('theme');
-  const systemPrefersLight = window.matchMedia && window.matchMedia('(prefers-color-scheme: light)').matches;
-  applyTheme(saved || (systemPrefersLight ? 'light' : 'dark'));
+  applyTheme(saved || 'light');   // Light mode is the default for first-time visitors
 })();
 
 let ratingsCache = {};
