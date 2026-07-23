@@ -623,3 +623,8 @@ html[data-theme="light"] #appDrawer .nav-pref-select{
 .access-badge.access-customer{ background:#fff3e0; color:#b23c00; }
 .access-badge.access-public{ background:#e6f4ea; color:#1b7a3d; }
 .access-badge.access-unknown{ background:#eceff1; color:#455a64; }
+
+/* Collapsible Metros panel (mirrors Chains) */
+#metroFilterBody{margin-top:6px;}
+#metroFilterBody.collapsed{display:none;}
+#metroFilterToggle{cursor:pointer;}

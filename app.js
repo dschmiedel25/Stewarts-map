@@ -2924,18 +2924,23 @@ function renderLayers(){
   // shows the city tree instead (pit stops are hidden on foot, so their filter would be noise).
   const cf = document.getElementById('chainFilter');
   if(cf) cf.style.display = (isLoggedIn() && Object.keys(CHAIN_REGISTRY).some(k => groupOf(k) !== 'metro') && travelMode !== 'foot') ? '' : 'none';
-  if(mFilter) mFilter.style.display = (hasMetros && isLoggedIn() && travelMode === 'foot') ? '' : 'none';
+  // Metros section shows in BOTH modes (collapsed by default): road mode renders metro pins too,
+  // so their toggles must stay reachable — kept as their own section rather than mixed into the
+  // pit-stop Chains list, so the two layers stay legible.
+  if(mFilter) mFilter.style.display = (hasMetros && isLoggedIn()) ? '' : 'none';
   if(!hasMetros) return;
 
   const sel = document.getElementById('travelModeSelect');
   if(sel && sel.value !== travelMode) sel.value = travelMode;
 
-  // "On foot" shows city locations only, so say which cities are actually covered.
+  // "On foot" shows city locations only — list covered cities as tap-to-jump buttons that
+  // center the map on that metro (useful when you're outside it and the map looks empty).
   const cov = document.getElementById('travelModeCoverage');
   if(cov){
     if(travelMode === 'foot'){
       const cities = [...new Set(metros.map(k => CHAIN_REGISTRY[k].metro || 'Other'))];
-      cov.textContent = `🏙️ City coverage: ${cities.join(', ')} — more cities coming`;
+      cov.innerHTML = `🏙️ Covered — tap to jump: ` +
+        cities.map(c => `<button type="button" class="d-city-jump" data-city="${escapeHtml(c)}">${escapeHtml(c)}</button>`).join(' ');
       cov.style.display = '';
     } else {
       cov.style.display = 'none';
@@ -2966,13 +2971,50 @@ function renderLayers(){
   }).join('');
 }
 
-// "Getting around" dropdown — everyone. Picks road ⟷ foot, which shows/hides the city layer.
+// Mode dropdown — everyone. Picks road ⟷ foot, which shows/hides the city layer.
 // A manual pick counts as an explicit choice (auto-detect defers) and syncs to the account.
 document.getElementById('travelModeSelect')?.addEventListener('change', (e) => {
   travelMode = (e.target.value === 'foot') ? 'foot' : 'road';
   localStorage.setItem('travelModeChosen', '1');
   saveTravelMode(); saveTravelModeToAccount(); renderLayers(); applyFilters();
 });
+
+// City jump: tapping a covered city centers the map there at street level and closes the drawer.
+// Center comes from METRO_BOUNDS when defined, else the average of that metro's locations.
+function metroCenter(city){
+  const b = METRO_BOUNDS[city];
+  if(b) return [(b.minLat + b.maxLat) / 2, (b.minLng + b.maxLng) / 2];
+  const keys = metroKeys().filter(k => (CHAIN_REGISTRY[k].metro || 'Other') === city);
+  const locs = seedLocations.filter(l => keys.includes(l.chain));
+  if(!locs.length) return null;
+  return [locs.reduce((s,l)=>s+l.lat,0)/locs.length, locs.reduce((s,l)=>s+l.lng,0)/locs.length];
+}
+document.getElementById('travelModeCoverage')?.addEventListener('click', (e) => {
+  const btn = e.target.closest('.d-city-jump');
+  if(!btn) return;
+  const c = metroCenter(btn.dataset.city);
+  if(!c) return;
+  map.setView(c, Math.max(METRO_MIN_ZOOM + 1, 13), {animate: true});
+  document.getElementById('drawerClose')?.click();
+});
+
+// Collapsible Metros panel — same remembered-collapse pattern as the Chains filter, so the
+// city checkbox tree isn't permanently stuck open in the drawer.
+(function(){
+  const toggle = document.getElementById('metroFilterToggle');
+  const body = document.getElementById('metroFilterBody');
+  const arrow = document.getElementById('metroFilterArrow');
+  if(!toggle || !body || !arrow) return;
+  function setCollapsed(collapsed){
+    body.classList.toggle('collapsed', collapsed);
+    toggle.classList.toggle('collapsed-toggle', collapsed);
+    arrow.style.transform = collapsed ? 'rotate(-90deg)' : 'rotate(0deg)';
+    localStorage.setItem('metroFilterCollapsed', collapsed ? '1' : '0');
+  }
+  const saved = localStorage.getItem('metroFilterCollapsed');
+  setCollapsed(saved === null ? true : saved === '1'); // collapsed by default — expand on demand
+  toggle.addEventListener('click', () => setCollapsed(!body.classList.contains('collapsed')));
+})();
 
 // Collapsible chain filter panel — same remembered-collapse pattern as the legend
 (function(){
