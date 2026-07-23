@@ -173,14 +173,15 @@ html[data-theme="light"] #appDrawer .nav-pref-select{
     padding:8px 10px;border-radius:8px;font-size:12px;line-height:1.6;border:1px solid var(--panel-border);
     max-width:min(200px, calc(100vw - 172px));
   }
-  #legendToggle, #chainFilterToggle{
+  #legendToggle, #chainFilterToggle, #metroFilterToggle{
     cursor:pointer;font-weight:700;color:var(--cream);white-space:nowrap;
     display:flex;justify-content:space-between;align-items:center;gap:8px;
   }
-  #legendBody, #chainFilterBody{margin-top:6px;}
-  #legendBody.collapsed, #chainFilterBody.collapsed{display:none;}
+  #legendBody, #chainFilterBody, #metroFilterBody{margin-top:6px;}
+  #legendBody.collapsed, #chainFilterBody.collapsed, #metroFilterBody.collapsed{display:none;}
   #legendToggle.collapsed-toggle #legendArrow,
-  #chainFilterToggle.collapsed-toggle #chainFilterArrow{transform:rotate(-90deg);display:inline-block;}
+  #chainFilterToggle.collapsed-toggle #chainFilterArrow,
+  #metroFilterToggle.collapsed-toggle #metroFilterArrow{transform:rotate(-90deg);display:inline-block;}
   .chain-filter-row{
     display:flex;align-items:center;gap:6px;padding:3px 0;cursor:pointer;
     color:var(--cream);white-space:nowrap;overflow:hidden;
@@ -629,9 +630,5 @@ html[data-theme="light"] #appDrawer .nav-pref-select{
 #metroFilterBody.collapsed{display:none;}
 #metroFilterToggle{cursor:pointer;}
 
-/* Unified drawer collapse sections — Metros matches Pit Stops exactly */
-#metroFilterBody{margin-top:6px;}
-#metroFilterBody.collapsed{display:none;}
-#metroFilterToggle.collapsed-toggle #metroFilterArrow,
-.d-collapse-head.collapsed-toggle .d-collapse-arrow{transform:rotate(-90deg);display:inline-block;}
+/* Unified drawer collapse — metro city rows */
 .metro-city{padding:0;}

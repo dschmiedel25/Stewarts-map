@@ -524,10 +524,49 @@ body:not(.logged-in) #appDrawer #navAppPref{ display:none !important; }
 /* Selected city pill */
 #appDrawer .d-city-jump.sel{ background:var(--accent); color:#fff; }
 
-/* Metros body indent matches Pit Stops; tighter, consistent section rhythm */
-#appDrawer #metroFilterBody{ margin:0 !important; padding:0 0 8px !important; }
+/* ===================================================================
+   UNIFIED DRAWER VERTICAL RHYTHM — one spacing system for every row.
+   Every top-level row (buttons, collapse heads, section labels) shares
+   the same 13px vertical padding and 20px gutter; sections carry no extra
+   padding of their own and are separated by a single consistent divider.
+   =================================================================== */
+#appDrawer .d-items{ padding:4px 0 8px !important; }
+
+/* All interactive rows + collapse heads: identical padding, so Pit Stops,
+   Metros, Passport, FAQ, and the toggles all sit on the same rhythm. */
+#appDrawer .d-items button,
+#appDrawer #chainFilterToggle,
+#appDrawer #metroFilterToggle,
+#appDrawer .d-collapse-head{
+  padding:13px 20px !important;
+  min-height:0 !important; margin:0 !important;
+  display:flex !important; align-items:center; gap:10px;
+}
+/* Both collapse arrows pinned to the far right, identically (fixes Metros
+   sitting inline while Pit Stops was far-right). */
+#appDrawer .d-collapse-arrow,
+#appDrawer #chainFilterArrow,
+#appDrawer #metroFilterArrow{ margin-left:auto !important; transition:transform .16s; }
+
+/* Sections: no padding of their own — children provide it — with a single
+   divider before each group. First group (after Passport/FAQ) divides too. */
+#appDrawer .d-section{ padding:0 !important; margin:0 !important; border-top:1px solid var(--shell-line) !important; }
+#appDrawer .d-section + .d-section{ border-top:1px solid var(--shell-line) !important; }
+
+/* Section label = header row on the same rhythm, hugging the control below it. */
+#appDrawer .d-section-label{
+  padding:14px 20px 8px !important; margin:0 !important;
+  font-size:15px; font-weight:700; color:var(--shell-ink);
+}
+/* Toggles grouped inside a section (Preferences) don't add their own divider. */
+#appDrawer .d-section .d-toggle{ border-top:none !important; }
+
+/* Dropdowns (Getting around, Directions app): aligned to the 20px gutter with
+   uniform bottom breathing room — kills the stray gap under "Getting around". */
+#appDrawer .nav-pref-select{
+  margin:0 20px 13px !important; width:calc(100% - 40px) !important;
+}
+/* Collapse bodies + rows flush and evenly indented. */
+#appDrawer #chainFilterBody, #appDrawer #metroFilterBody{ margin:0 !important; padding:0 0 6px !important; }
 #appDrawer #metroFilterBody .chain-filter-row{ padding:11px 20px 11px 46px !important; }
-#appDrawer .d-section{ border-top:1px solid var(--shell-line); }
-#appDrawer .d-section:first-of-type{ border-top:none; }
-#appDrawer .d-section .d-toggle{ margin:2px 0 0; }
-#appDrawer .d-items > .d-toggle{ margin-top:0; }
+#appDrawer .d-coverage-note{ margin:0 20px 12px !important; }
