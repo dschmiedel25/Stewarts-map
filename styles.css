@@ -70,15 +70,17 @@ html[data-theme="light"] #appDrawer .nav-pref-select{
   display:none;
 }
   #statPillRow{
-    position:relative;height:30px;margin-top:10px;overflow:hidden;
+    display:flex; flex-wrap:wrap; justify-content:center; align-items:center;
+    gap:8px; margin-top:10px; min-height:0;
   }
   .stat-pill{
-    position:absolute;top:0;left:0;font-size:12px;font-weight:600;color:var(--cream);white-space:nowrap;
+    font-size:12px;font-weight:600;color:var(--cream);white-space:nowrap;
     background:rgba(245,166,35,.12);border:1px solid rgba(245,166,35,.35);
-    padding:6px 11px;border-radius:20px;opacity:0;transition:opacity .4s ease;
+    padding:6px 11px;border-radius:20px;
     max-width:100%;overflow:hidden;text-overflow:ellipsis;
   }
-  .stat-pill.ticker-active{opacity:1;}
+  /* Empty pills collapse so they don't leave gaps */
+  .stat-pill:empty{ display:none; }
   #mostRecentBadge{cursor:pointer;}
   #mapWrap{position:relative;flex:1 1 auto;min-height:0;}
   #map{position:absolute;inset:0;}

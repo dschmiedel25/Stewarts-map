@@ -2169,14 +2169,27 @@ async function updateMostRecentBadge(){
   _mostRecentLoaded = true;
   try{
     const {db, collection, query, where, orderBy, limit, getDocs} = await fb();
-    const snap = await getDocs(query(
-      collection(db, 'activity'),
-      where('type', '==', 'rating'),
-      orderBy('ts', 'desc'),
-      limit(1)
-    ));
     let rec = null;
-    snap.forEach(d => rec = d.data());
+    try{
+      // Fast path: ordered query (needs a composite index type+ts).
+      const snap = await getDocs(query(
+        collection(db, 'activity'),
+        where('type', '==', 'rating'),
+        orderBy('ts', 'desc'),
+        limit(1)
+      ));
+      snap.forEach(d => rec = d.data());
+    }catch(indexErr){
+      // Fallback: no composite index — fetch rating activity unordered and pick newest client-side.
+      // Slightly more reads, but works with no manual index setup.
+      const snap2 = await getDocs(query(collection(db, 'activity'), where('type', '==', 'rating')));
+      let newest = null;
+      snap2.forEach(d => {
+        const v = d.data();
+        if(v && v.ts && (!newest || v.ts > newest.ts)) newest = v;
+      });
+      rec = newest;
+    }
     if(!rec || !rec.locId){ el.textContent = ''; refreshStatTicker(); return; }
     const loc = locationsById[rec.locId];
     const name = (loc && loc.n) || 'a bathroom';

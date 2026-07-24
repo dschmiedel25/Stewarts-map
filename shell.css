@@ -19,7 +19,6 @@
 
 /* ---------- Elements the redesign drops (kept in DOM for app.js) ---------- */
 #chainBadge,
-#statPillRow,
 #installBanner .icon{ display:none !important; }
 
 /* ---------- Header: compact dark bar ---------- */
@@ -570,3 +569,22 @@ body:not(.logged-in) #appDrawer #navAppPref{ display:none !important; }
 #appDrawer #chainFilterBody, #appDrawer #metroFilterBody{ margin:0 !important; padding:0 0 6px !important; }
 #appDrawer #metroFilterBody .chain-filter-row{ padding:11px 20px 11px 46px !important; }
 #appDrawer .d-coverage-note{ margin:0 20px 12px !important; }
+
+/* ---------- Below-header stat strip (most-recent + this-week, centered) ---------- */
+#appShell #statPillRow, #statPillRow{
+  display:flex !important; flex-wrap:wrap; justify-content:center; align-items:center;
+  gap:8px; margin:8px 12px 0 !important; padding:0;
+}
+#statPillRow .stat-pill{
+  position:static !important; opacity:1 !important;
+  font-size:12px; font-weight:600; color:var(--shell-ink);
+  background:var(--shell-chrome2); border:1px solid var(--shell-line);
+  padding:6px 12px; border-radius:20px; white-space:nowrap;
+  max-width:100%; overflow:hidden; text-overflow:ellipsis;
+}
+/* Only the two live pills participate; the unbuilt placeholders never show */
+#openNowBadge, #totalCoverageBadge, #mostReviewedBadge, #highestRatedBadge,
+#nearestBathroomBadge, #topRatedNearbyBadge, #closingSoonBadge,
+#accessibleNearbyBadge, #myProgressBadge{ display:none !important; }
+#statPillRow .stat-pill:empty{ display:none !important; }
+#mostRecentBadge{ cursor:pointer; }
